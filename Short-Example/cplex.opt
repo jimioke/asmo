@@ -1,0 +1,6 @@
+solnpool solnpool.gdx
+solnpoolpop 2
+solnpoolintensity 4
+populatelim 5
+solnpoolgap 0.1
+SolnPoolReplace 2

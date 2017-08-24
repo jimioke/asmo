@@ -1,0 +1,3580 @@
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 1
+"M E T R O  M A P  A U T O M A T I O N"
+C o m p i l a t i o n
+
+
+      March 21 2013
+      SMALL WORKING MODEL
+      MIP Metro Map Automation
+      number of vertices n = 4
+      number of edges m = 3
+      number of multiedges m' =  0
+      number of faces f = 1
+  11   
+  15   
+  17   
+  18  scalar starttime; starttime = jnow; // current time
+  19   
+  20  *=========================================================================
+  21  *                                  DATA
+  22  *=========================================================================
+  23  SETS
+  24  u           "vertices"           /1*11/
+  25  b(u)        "subset of vertices with more than one spanning edge"
+  26  ml          "metro lines"        / 1  "r"
+  27                                     2  "g"
+  28                                     3  "b"
+  29                                     4  "DarkOrange"
+  30                                     /
+  31  r           "relative position"  / prec, orig, succ /
+  32  c           "compass directions" / N, S, E, W, NE, NW, SE, SW /
+  33  e(u,u)      "edges as directed and undirected pairs"
+  34  f(u,u)      "undirected edges"
+  35  g(u,u)      "opposite directed edge"
+  36  n(u,u,u,u)  "nonincident edges"
+  37  S           "cost factors"       /1*2/
+  38  j(u,u)      "set of degrees"
+  39   ;
+  40   
+  41  Alias (u, v, w, ww);
+  42   
+  43  Scalars
+  44          M     "maximum length or width of map" / 52 /
+  45          lmin  "minimum edge length"            / 2 /
+  46          dmin  "minimum edge distance"          / 1 /
+  47          ;
+  48   
+  49  PARAMETERS
+  50      deg(u)  degree  /1   1
+  51                       2   3
+  52                       3   4
+  53                       4   4
+  54                       5   4
+  55                       6   1
+  56                       7   2
+  57                       8   2
+  58                       9   2
+  59                       10  2
+  60                       11  1
+  61                       /
+  62   
+  63  * 1: bend cost,  2: relative position cost,   3: total edge length
+  64      weight(S) weights / 1  .0001
+  65                          2  .9999 / ;
+  66   
+  67   
+  68  * Specifying vertices subject to the circular vertex order constraint (H2)
+  69  * Condition: degree of vertex must be greater than 2
+  70  b(u)=yes$(deg(u) ge 2);
+  71   
+  72   
+  73  * INCIDENCES
+  74  TABLE   order(u,v) ordered vertex neighbor incidence
+  75          1  2  3  4  5  6  7  8  9  10 11
+  76      1
+  77      2   1     1  1
+  78      3      1     1  1              1
+  79      4      1  1     1        1
+  80      5         1  1     1  1
+  81      6
+  82      7               1           1
+  83      8            1              1
+  84      9                     1  1
+  85      10        1                       1
+  86      11
+  87      ;
+  88   
+  89  j(u,v)=yes$order(u,v)  ;
+  90   
+  91  TABLE   path(u,v) directed path incidence
+  92          1  2  3  4  5  6  7  8  9  10 11
+  93      1      1
+  94      2   1     1  1
+  95      3      1     1  1              1
+  96      4      1  1     1        1
+  97      5         1  1     1  1
+  98      6               1
+  99      7               1           1
+ 100      8            1              1
+ 101      9                     1  1
+ 102      10        1                       1
+ 103      11                             1
+ 104      ;
+ 105   
+ 106  TABLE   upath(u,v) undirected path incidence
+ 107          1  2  3  4  5  6  7  8  9  10 11
+ 108      1      1
+ 109      2         1  1
+ 110      3               1              1
+ 111      4         1     1
+ 112      5                  1  1
+ 113      6
+ 114      7
+ 115      8            1
+ 116      9                     1  1
+ 117      10                                1
+ 118      11
+ 119      ;
+ 120   
+ 121  TABLE   opath(u,v) directed path incidence (opposite sense)
+ 122          1  2  3  4  5  6  7  8  9  10 11
+ 123      1
+ 124      2   1
+ 125      3      1     1
+ 126      4      1                 1
+ 127      5         1  1
+ 128      6               1
+ 129      7               1           1
+ 130      8                           1
+ 131      9
+ 132      10        1
+ 133      11                             1
+ 134      ;
+ 135   
+ 136  * Define edges
+ 137  e(u,v) = yes$path(u,v);
+ 138  f(u,v) = yes$upath(u,v);
+ 139  g(u,v) = yes$opath(u,v);
+ 140   
+ 141   
+ 142  TABLE   e2e(u,v,w,ww) edge-to-edge incidence
+ 143            1.2   2.3   2.4   3.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.
+      8   10.11
+ 144      1.2         1     1
+ 145      2.3                     1     1     1
+ 146      2.4                                       1     1
+ 147      3.5                                                   1     1
+ 148      3.10                                                                            
+          1
+ 149      4.3         1                 1     1           1
+ 150      4.5                           1                       1     1
+ 151      5.6
+ 152      5.7
+ 153      8.4
+ 154      9.7
+ 155      9.8
+ 156      10.11
+ 157   
+ 158  TABLE   ne2e(u,v,w,ww) edge-to-edge non-incidence same face
+ 159            1.2   2.3   2.4   3.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.
+      8   10.11
+ 160      1.2                                 1                 1                         
+          1
+ 161      2.3
+ 162      2.4
+ 163      3.5
+ 164      3.10
+ 165      4.3
+ 166      4.5                                                                     1     1
+ 167      5.6
+ 168      5.7
+ 169      8.4                                                         1           1
+ 170      9.7
+ 171      9.8                                                         1
+ 172      10.11
+ 173      ;
+ 174   
+ 175  * Define nonincident edges
+ 176  n(u,v,w,ww) = yes$ne2e(u,v,w,ww);
+ 177   
+ 178  TABLE   sec(r,u,v) sector positioning
+ 179              1   2   3   4   5   6   7   8   9   10  11
+ 180      orig.1      0
+ 181      orig.2  4       2   1
+ 182      orig.3      6       7   0                   4
+ 183      orig.4      5   3       2           7
+ 184      orig.5          4   6       1   0
+ 185      orig.6                  5
+ 186      orig.7                  4               6
+ 187      orig.8              3                   0
+ 188      orig.9                          2   4
+ 189      orig.10         0                                2
+ 190      orig.11                                     6
+ 191      prec.1      7
+ 192      prec.2  3       1   0
+ 193      prec.3      5       6   7                   3
+ 194      prec.4      4   2       1           6
+ 195      prec.5          3   5       0   7
+ 196      prec.6                  4
+ 197      prec.7                  3               5
+ 198      prec.8              2                   7
+ 199      prec.9                          1   3
+ 200      prec.10         7                                1
+ 201      prec.11                                     5
+ 202      succ.1      1
+ 203      succ.2  5       3   2
+ 204      succ.3      7       0   1                   5
+ 205      succ.4      6   4       3           0
+ 206      succ.5          5   7       2   1
+ 207      succ.6                  6
+ 208      succ.7                  5               7
+ 209      succ.8              4                   1
+ 210      succ.9                          3   5
+ 211      succ.10         1                                3
+ 212      succ.11                                     7
+ 213   
+ 214  TABLE   lin(ml,u,v)  metro lines
+ 215           1.2   2.3   2.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.8   10.
+      11
+ 216      1    1           1                       1     1
+ 217      2          1           1                             1
+ 218      3                            1     1                       1           1     1
+ 219      4                                                                1
+ 220      ;
+ 221   
+ 222  * TABLE   lin2(ml,u) stations per line
+ 223  *          1   2   3   4   5   6   7   8   9   10  11
+ 224  *     1    1   1       1   1   1
+ 225  *     2        1   1       1       1
+ 226  *     3            1   1               1   1   1   1
+ 227  *     4                            1       1
+ 228  * ;
+ 229   
+ 230  *=========================================================================
+ 231  *                                VARIABLES
+ 232  *=========================================================================
+ 233  VARIABLES
+ 234    Z         total cost
+ 235    z2(u)     -45 degree coordinate
+ 236    deltadir(ml,u,v,w)  sector difference btw adjacent egdes uv and uw as measure of a
+      ngle btw;
+ 237   
+ 238  *INTEGER VARIABLES
+ 239  *;
+ 240   
+ 241   
+ 242  POSITIVE VARIABLES
+ 243    x(u)      x coordinate
+ 244    y(u)      y coordinate
+ 245    z1(u)     +45 degree coordinate
+ 246    dir(u,v)         octilinear direction of edge uv
+ 247    lambda(u,v)      upper bound on edge length
+ 248    cs1           total line bend cost
+ 249    cs2           total relative position cost
+ 250    bd(ml,u,v,w)        bend cost of angle between uv and vw
+ 251    ;
+ 252   
+ 253   
+ 254  BINARY VARIABLES
+ 255    alpha(u,v,r)   closest octilinear approximation
+ 256    beta(u,v)
+ 257    delta1(ml,u,v,w)
+ 258    delta2(ml,u,v,w)
+ 259    rpos(u,v)        relative position penalty
+ 260    gamma(u,v,w,ww,c) binary variable selecting compass orientation
+ 261    ;
+ 262   
+ 263   
+ 264   
+ 265   
+ 266  *=========================================================================
+ 267  *                               EQUATIONS
+ 268  *=========================================================================
+ 269   
+ 270  EQUATIONS
+ 271    xlim(u)
+ 272    ylim(u)
+ 273    defz1(u)
+ 274    defz2(u)
+ 275    octicon1(u,v)
+ 276    octicon2a(u,v), octicon2b(u,v)
+ 277    octicon3a(r,u,v),octicon3b(r,u,v),octicon3c(r,u,v)
+ 278    octicon3d(r,u,v),octicon3e(r,u,v),octicon3f(r,u,v)
+ 279    octicon3g(r,u,v),octicon3h(r,u,v),octicon3i(r,u,v)
+ 280    octicon3j(r,u,v),octicon3k(r,u,v),octicon3l(r,u,v)
+ 281    octicon3m(r,u,v),octicon3n(r,u,v),octicon3o(r,u,v)
+ 282    octicon3p(r,u,v),octicon3q(r,u,v),octicon3r(r,u,v)
+ 283    octicon3s(r,u,v),octicon3t(r,u,v),octicon3u(r,u,v)
+ 284    octicon3v(r,u,v),octicon3w(r,u,v),octicon3x(r,u,v)
+ 285    cvocon1(u)
+ 286    cvocon2a, cvocon2b, cvocon2c,
+ 287    cvocon3a, cvocon3b, cvocon3c, cvocon3d
+ 288    cvocon4a, cvocon4b, cvocon4c, cvocon4d
+ 289    cvocon5a, cvocon5b, cvocon5c, cvocon5d
+ 290    cvocon7a, cvocon7b
+ 291    cvocon8a, cvocon8b
+ 292    cvocon9a, cvocon9b
+ 293    cvocon10a, cvocon10b
+ 294    edgecon(u,v,w,ww)
+ 295    edgeconE1(u,v,w,ww),  edgeconE2(u,v,w,ww),  edgeconE3(u,v,w,ww),  edgeconE4(u,v,w,
+      ww)
+ 296    edgeconNE1(u,v,w,ww), edgeconNE2(u,v,w,ww), edgeconNE3(u,v,w,ww), edgeconNE4(u,v,w
+      ,ww)
+ 297    edgeconN1(u,v,w,ww),  edgeconN2(u,v,w,ww),  edgeconN3(u,v,w,ww),  edgeconN4(u,v,w,
+      ww)
+ 298    edgeconNW1(u,v,w,ww), edgeconNW2(u,v,w,ww), edgeconNW3(u,v,w,ww), edgeconNW4(u,v,w
+      ,ww)
+ 299    edgeconW1(u,v,w,ww),  edgeconW2(u,v,w,ww),  edgeconW3(u,v,w,ww),  edgeconW4(u,v,w,
+      ww)
+ 300    edgeconSW1(u,v,w,ww), edgeconSW2(u,v,w,ww), edgeconSW3(u,v,w,ww), edgeconSW4(u,v,w
+      ,ww)
+ 301    edgeconS1(u,v,w,ww),  edgeconS2(u,v,w,ww),  edgeconS3(u,v,w,ww),  edgeconS4(u,v,w,
+      ww)
+ 302    edgeconSE1(u,v,w,ww), edgeconSE2(u,v,w,ww), edgeconSE3(u,v,w,ww), edgeconSE4(u,v,w
+      ,ww)
+ 303    telcon1(u,v)
+ 304    telcon2(u,v)
+ 305    telcon3(u,v)
+ 306    telcon4(u,v)
+ 307    rposcon1(u,v)
+ 308    rposcon2(u,v)
+ 309    ddi(ml,u,v,w)
+ 310    bendcon1(ml,u,v,w)
+ 311    bendcon2(ml,u,v,w)
+ 312    objbend
+ 313    objrpos
+ 314    obj;
+ 315   
+ 316  * Map limits
+ 317  xlim(u).. x(u) =l= M;
+ 318  ylim(u).. y(u) =l= M;
+ 319   
+ 320  * Z coordinates
+ 321  defz1(u).. z1(u) =e= (x(u) + y(u))/2;
+ 322  defz2(u).. z2(u) =e= (x(u) - y(u))/2;
+ 323   
+ 324  * Octilinearity constraints  (H1, H3)
+ 325  octicon1(u,v)$f(u,v)..     sum(r, alpha(u,v,r)) =e= 1;
+ 326  octicon2a(u,v)$f(u,v)..    dir(u,v) =e= sum(r,(sec(r,u,v)*alpha(u,v,r))) ;
+ 327  octicon2b(u,v)$g(u,v)..    dir(u,v) =e= sum(r,(sec(r,u,v)*alpha(v,u,r))) ;
+ 328   
+ 329  octicon3a(r,u,v)$(sec(r,u,v)=0 and f(u,v))..   y(u) - y(v) =l=  M*(1-alpha(u,v,r));
+ 330  octicon3b(r,u,v)$(sec(r,u,v)=0 and f(u,v))..  -y(u) + y(v) =l=  M*(1-alpha(u,v,r));
+ 331  octicon3c(r,u,v)$(sec(r,u,v)=0 and f(u,v))..  -x(u) + x(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 332   
+ 333  octicon3d(r,u,v)$(sec(r,u,v)=1 and f(u,v))..   z2(u) - z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 334  octicon3e(r,u,v)$(sec(r,u,v)=1 and f(u,v))..  -z2(u) + z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 335  octicon3f(r,u,v)$(sec(r,u,v)=1 and f(u,v))..  -z1(u) + z1(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 336   
+ 337  octicon3g(r,u,v)$(sec(r,u,v)=2 and f(u,v))..   x(u) - x(v) =l=  M*(1-alpha(u,v,r));
+ 338  octicon3h(r,u,v)$(sec(r,u,v)=2 and f(u,v))..  -x(u) + x(v) =l=  M*(1-alpha(u,v,r));
+ 339  octicon3i(r,u,v)$(sec(r,u,v)=2 and f(u,v))..  -y(u) + y(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 340   
+ 341  octicon3j(r,u,v)$(sec(r,u,v)=3 and f(u,v))..   z1(u) - z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 342  octicon3k(r,u,v)$(sec(r,u,v)=3 and f(u,v))..  -z1(u) + z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 343  octicon3l(r,u,v)$(sec(r,u,v)=3 and f(u,v))..   z2(u) - z2(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 344   
+ 345  octicon3m(r,u,v)$(sec(r,u,v)=4 and f(u,v))..   y(u) - y(v) =l=  M*(1-alpha(u,v,r));
+ 346  octicon3n(r,u,v)$(sec(r,u,v)=4 and f(u,v))..  -y(u) + y(v) =l=  M*(1-alpha(u,v,r));
+ 347  octicon3o(r,u,v)$(sec(r,u,v)=4 and f(u,v))..   x(u) - x(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 348   
+ 349  octicon3p(r,u,v)$(sec(r,u,v)=5 and f(u,v))..   z2(u) - z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 350  octicon3q(r,u,v)$(sec(r,u,v)=5 and f(u,v))..  -z2(u) + z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 351  octicon3r(r,u,v)$(sec(r,u,v)=5 and f(u,v))..   z1(u) - z1(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 352   
+ 353  octicon3s(r,u,v)$(sec(r,u,v)=6 and f(u,v))..   x(u) - x(v) =l=  M*(1-alpha(u,v,r));
+ 354  octicon3t(r,u,v)$(sec(r,u,v)=6 and f(u,v))..  -x(u) + x(v) =l=  M*(1-alpha(u,v,r));
+ 355  octicon3u(r,u,v)$(sec(r,u,v)=6 and f(u,v))..   y(u) - y(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 356   
+ 357  octicon3v(r,u,v)$(sec(r,u,v)=7 and f(u,v))..   z1(u) - z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 358  octicon3w(r,u,v)$(sec(r,u,v)=7 and f(u,v))..  -z1(u) + z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 359  octicon3x(r,u,v)$(sec(r,u,v)=7 and f(u,v))..  -z2(u) + z2(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 360   
+ 361   
+ 362  * Circular vertex orders (H2)
+ 363  cvocon1(b).. sum(v, beta(b,v)$j(b,v)) =e= 1;
+ 364   
+ 365  cvocon2a.. dir('2','4') =l= dir('2','3')  - 1 + 8*beta('2','4');
+ 366  cvocon2b.. dir('2','3') =l= dir('2','1')  - 1 + 8*beta('2','3');
+ 367  cvocon2c.. dir('2','1') =l= dir('2','4')  - 1 + 8*beta('2','1');
+ 368   
+ 369  cvocon3a.. dir('3','5') =l= dir('3','10')  - 1 + 8*beta('3','5');
+ 370  cvocon3b.. dir('3','10') =l= dir('3','2')  - 1 + 8*beta('3','10');
+ 371  cvocon3c.. dir('3','2') =l= dir('3','4')  - 1 + 8*beta('3','2');
+ 372  cvocon3d.. dir('3','4') =l= dir('3','5')  - 1 + 8*beta('3','4');
+ 373   
+ 374   
+ 375  cvocon4a.. dir('4','5') =l= dir('4','3')  - 1 + 8*beta('4','5');
+ 376  cvocon4b.. dir('4','3') =l= dir('4','2')  - 1 + 8*beta('4','3');
+ 377  cvocon4c.. dir('4','2') =l= dir('4','8')  - 1 + 8*beta('4','2');
+ 378  cvocon4d.. dir('4','8') =l= dir('4','5')  - 1 + 8*beta('4','8');
+ 379   
+ 380  cvocon5a.. dir('5','7') =l= dir('5','6')  - 1 + 8*beta('5','7');
+ 381  cvocon5b.. dir('5','6') =l= dir('5','3')  - 1 + 8*beta('5','6');
+ 382  cvocon5c.. dir('5','3') =l= dir('5','4')  - 1 + 8*beta('5','3');
+ 383  cvocon5d.. dir('5','4') =l= dir('5','7')  - 1 + 8*beta('5','4');
+ 384   
+ 385  cvocon7a.. dir('7','5') =l= dir('7','9')  - 1 + 8*beta('7','5');
+ 386  cvocon7b.. dir('7','9') =l= dir('7','5')  - 1 + 8*beta('7','9');
+ 387   
+ 388  cvocon8a.. dir('8','9') =l= dir('8','4')  - 1 + 8*beta('8','9');
+ 389  cvocon8b.. dir('8','4') =l= dir('8','9')  - 1 + 8*beta('8','4');
+ 390   
+ 391  cvocon9a.. dir('9','7') =l= dir('9','8')  - 1 + 8*beta('9','7');
+ 392  cvocon9b.. dir('9','8') =l= dir('9','7')  - 1 + 8*beta('9','8');
+ 393   
+ 394  cvocon10a.. dir('10','3') =l= dir('10','11')  - 1 + 8*beta('10','3');
+ 395  cvocon10b.. dir('10','11') =l= dir('10','3')  - 1 + 8*beta('10','11');
+ 396   
+ 397  * Edge spacing constraints (H4)
+ 398  edgecon(n).. sum(c, gamma(n,c)) =g= 1;
+ 399   
+ 400  edgeconE1(u,v,w,ww)$n(u,v,w,ww).. x(w) - x(u)  =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 401  edgeconE2(u,v,w,ww)$n(u,v,w,ww).. x(w) - x(v)  =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 402  edgeconE3(u,v,w,ww)$n(u,v,w,ww).. x(ww) - x(u) =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 403  edgeconE4(u,v,w,ww)$n(u,v,w,ww).. x(ww) - x(v) =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 404   
+ 405  edgeconNE1(u,v,w,ww)$n(u,v,w,ww).. z1(w) - z1(u)  =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 406  edgeconNE2(u,v,w,ww)$n(u,v,w,ww).. z1(w) - z1(v)  =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 407  edgeconNE3(u,v,w,ww)$n(u,v,w,ww).. z1(ww) - z1(u) =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 408  edgeconNE4(u,v,w,ww)$n(u,v,w,ww).. z1(ww) - z1(v) =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 409   
+ 410  edgeconN1(u,v,w,ww)$n(u,v,w,ww).. y(w) - y(u)  =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 411  edgeconN2(u,v,w,ww)$n(u,v,w,ww).. y(w) - y(v)  =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 412  edgeconN3(u,v,w,ww)$n(u,v,w,ww).. y(ww) - y(u) =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 413  edgeconN4(u,v,w,ww)$n(u,v,w,ww).. y(ww) - y(v) =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 414   
+ 415  edgeconNW1(u,v,w,ww)$n(u,v,w,ww).. -z2(w) + z2(u)  =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 416  edgeconNW2(u,v,w,ww)$n(u,v,w,ww).. -z2(w) + z2(v)  =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 417  edgeconNW3(u,v,w,ww)$n(u,v,w,ww).. -z2(ww) + z2(u) =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 418  edgeconNW4(u,v,w,ww)$n(u,v,w,ww).. -z2(ww) + z2(v) =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 419   
+ 420  edgeconW1(u,v,w,ww)$n(u,v,w,ww).. -x(w) + x(u)  =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 421  edgeconW2(u,v,w,ww)$n(u,v,w,ww).. -x(w) + x(v)  =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 422  edgeconW3(u,v,w,ww)$n(u,v,w,ww).. -x(ww) + x(u) =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 423  edgeconW4(u,v,w,ww)$n(u,v,w,ww).. -x(ww) + x(v) =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 424   
+ 425  edgeconSW1(u,v,w,ww)$n(u,v,w,ww).. -z1(w) + z1(u)  =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 426  edgeconSW2(u,v,w,ww)$n(u,v,w,ww).. -z1(w) + z1(v)  =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 427  edgeconSW3(u,v,w,ww)$n(u,v,w,ww).. -z1(ww) + z1(u) =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 428  edgeconSW4(u,v,w,ww)$n(u,v,w,ww).. -z1(ww) + z1(v) =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 429   
+ 430  edgeconS1(u,v,w,ww)$n(u,v,w,ww).. -y(w) + y(u)  =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 431  edgeconS2(u,v,w,ww)$n(u,v,w,ww).. -y(w) + y(v)  =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 432  edgeconS3(u,v,w,ww)$n(u,v,w,ww).. -y(ww) + y(u) =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 433  edgeconS4(u,v,w,ww)$n(u,v,w,ww).. -y(ww) + y(v) =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 434   
+ 435  edgeconSE1(u,v,w,ww)$n(u,v,w,ww).. z2(w) - z2(u)  =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 436  edgeconSE2(u,v,w,ww)$n(u,v,w,ww).. z2(w) - z2(v)  =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 437  edgeconSE3(u,v,w,ww)$n(u,v,w,ww).. z2(ww) - z2(u) =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 438  edgeconSE4(u,v,w,ww)$n(u,v,w,ww).. z2(ww) - z2(v) =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 439   
+ 440   
+ 441  * Line Bends (S1 - soft constraint 1)
+ 442  ddi(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w)).. deltadir(ml,u,v,w) =e= dir(u,v) - dir(
+      v,w);
+ 443   
+ 444  *$(f(u,v) and f(v,w))
+ 445   
+ 446  * Bend constraints
+ 447  bendcon1(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w))..  bd(ml,u,v,w) =g= deltadir(ml,u,v
+      ,w) - 8*delta1(ml,u,v,w) + 8*delta2(ml,u,v,w);
+ 448  bendcon2(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w)).. -bd(ml,u,v,w) =l= deltadir(ml,u,v
+      ,w) - 8*delta1(ml,u,v,w) + 8*delta2(ml,u,v,w);
+ 449   
+ 450  * Relative position constraint S2
+ 451  rposcon1(f)..   M*rpos(f) =g= dir(f) - sec('orig',f);
+ 452  rposcon2(f)..  -M*rpos(f) =l= dir(f) - sec('orig',f);
+ 453   
+ 454  *$ontext
+ 455  * Total edge length S3 constraints
+ 456  telcon1(u,v)$f(u,v)..  x(u) - x(v) =l= 4;
+ 457  telcon2(u,v)$f(u,v).. -x(u) + x(v) =l= 4;
+ 458  telcon3(u,v)$f(u,v)..  y(u) - y(v) =l= 4;
+ 459  telcon4(u,v)$f(u,v).. -y(u) + y(v) =l= 4;
+ 460  *$offtext
+ 461   
+ 462   
+ 463   
+ 464  * Total bend cost (S1)
+ 465  objbend.. cs1 =e= sum(  ml,  sum( (u,v,w)$(lin(ml,u,v) and lin(ml,v,w)), bd(ml,u,v,w
+      ) )  );
+ 466   
+ 467  * Relative position cost (S2)
+ 468  objrpos.. cs2 =e= sum(f, rpos(f));
+ 469   
+ 470  *OBJECTIVE
+ 471  obj.. Z =e= weight('1')*cs1 + weight('2')*cs2 ;
+ 472   
+ 473   
+ 474  *=========================================================================
+ 475  *                               MODEL
+ 476  *=========================================================================
+ 477  MODEL automap /   all     /;
+ 478   
+ 479   
+ 480  set combinations singobjmodels /R0*R4/ ;
+ 481   
+ 482  Table newweights(combinations, S)  updater for weight
+ 483          1          2
+ 484    R0    0.0001     0.9999
+ 485    R1    0.2500     0.7500
+ 486    R2    0.5        0.5
+ 487    R3    0.75       0.25
+ 488    R4    0.9999     0.0001
+ 489  ;
+ 490   
+ 491  parameter    resultantcs1(combinations)  collector for level of cs1;
+ 492  parameter    resultantcs2(combinations)  collector for level of cs2;
+ 493   
+ 494   
+ 495  Set modelattrib model solution information to collect
+ 496       / modelstat, solvestat, objval /;
+ 497  Parameter
+ 498        gussoptions / UpdateType 1, Optfile 1 /
+ 499        solutionstatus(combinations,modelattrib) Solution status report with initial v
+      aues
+ 500                / #combinations.(ModelStat na, SolveStat na, ObjVal na) /;
+ 501   
+ 502  display solutionstatus;
+ 503  set dict   / combinations  .scenario  .''
+ 504               gussoptions   .opt       .solutionstatus
+ 505               weight        .param     .newweights
+ 506               cs1           .level     .resultantcs1
+ 507               cs2           .level     .resultantcs2
+ 508             /
+ 509  ;
+ 510   
+ 511  automap.optcr = 0;
+ 512  *automap.nodlim=0;
+ 513  *automap.threads=4;
+ 514  *automap.reslim=2000;
+ 515   
+ 516  Solve automap using mip minimizing Z scenario dict;
+ 517   
+ 518  option resultantcs1:0:0:1;
+ 519  option resultantcs2:0:0:1;
+ 520   
+ 521  display resultantcs1, resultantcs2, solutionstatus;
+ 522   
+ 523  set Error(combinations) No solution found;
+ 524  Error(combinations) = resultantcs1(combinations) = 0;
+ 525  abort$(card(error)) 'Missing solution for some scenarios', error;
+ 526   
+ 527   
+ 528   
+      file coords /coordinates.csv/ ;
+      put  coords ;
+      coords.lj=1; [label justification, left]
+      put 'x1'',', 'x2'',','y1'',', 'y2'',','ln'',','co'/;
+      loop((ml,u,v), put$(lin(ml,u,v)) x.l(u)',', x.l(v)',',y.l(u)',',y.l(v)',', ord(ml)',
+      ', ml.te(ml)/);
+      putclose coords ;
+      scalar elapsed; elapsed = (jnow - starttime)*24*3600;
+      display elapsed;
+
+
+COMPILATION TIME     =        0.003 SECONDS      3 MB  24.2.2 r44857 XXX-DEG
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 2
+"M E T R O  M A P  A U T O M A T I O N"
+E x e c u t i o n
+
+
+----    502 PARAMETER solutionstatus  Solution status report with initial vaues
+
+     modelstat   solvestat      objval
+
+R0          NA          NA          NA
+R1          NA          NA          NA
+R2          NA          NA          NA
+R3          NA          NA          NA
+R4          NA          NA          NA
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 3
+"M E T R O  M A P  A U T O M A T I O N"
+Equation Listing    SOLVE automap Using MIP From line 516
+
+
+---- xlim  =L=  
+
+xlim(1)..  x(1) =L= 52 ; (LHS = 0)
+     
+xlim(2)..  x(2) =L= 52 ; (LHS = 0)
+     
+xlim(3)..  x(3) =L= 52 ; (LHS = 0)
+     
+REMAINING 8 ENTRIES SKIPPED
+
+
+---- ylim  =L=  
+
+ylim(1)..  y(1) =L= 52 ; (LHS = 0)
+     
+ylim(2)..  y(2) =L= 52 ; (LHS = 0)
+     
+ylim(3)..  y(3) =L= 52 ; (LHS = 0)
+     
+REMAINING 8 ENTRIES SKIPPED
+
+
+---- defz1  =E=  
+
+defz1(1)..  - 0.5*x(1) - 0.5*y(1) + z1(1) =E= 0 ; (LHS = 0)
+     
+defz1(2)..  - 0.5*x(2) - 0.5*y(2) + z1(2) =E= 0 ; (LHS = 0)
+     
+defz1(3)..  - 0.5*x(3) - 0.5*y(3) + z1(3) =E= 0 ; (LHS = 0)
+     
+REMAINING 8 ENTRIES SKIPPED
+
+
+---- defz2  =E=  
+
+defz2(1)..  z2(1) - 0.5*x(1) + 0.5*y(1) =E= 0 ; (LHS = 0)
+     
+defz2(2)..  z2(2) - 0.5*x(2) + 0.5*y(2) =E= 0 ; (LHS = 0)
+     
+defz2(3)..  z2(3) - 0.5*x(3) + 0.5*y(3) =E= 0 ; (LHS = 0)
+     
+REMAINING 8 ENTRIES SKIPPED
+
+
+---- octicon1  =E=  
+
+octicon1(1,2)..  alpha(1,2,prec) + alpha(1,2,orig) + alpha(1,2,succ) =E= 1 ;
+     
+      (LHS = 0, INFES = 1 ****)
+     
+octicon1(2,3)..  alpha(2,3,prec) + alpha(2,3,orig) + alpha(2,3,succ) =E= 1 ;
+     
+      (LHS = 0, INFES = 1 ****)
+     
+octicon1(2,4)..  alpha(2,4,prec) + alpha(2,4,orig) + alpha(2,4,succ) =E= 1 ;
+     
+      (LHS = 0, INFES = 1 ****)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- octicon2a  =E=  
+
+octicon2a(1,2)..  dir(1,2) - 7*alpha(1,2,prec) - alpha(1,2,succ) =E= 0 ; (LHS = 0)
+     
+octicon2a(2,3)..  dir(2,3) - alpha(2,3,prec) - 2*alpha(2,3,orig) - 3*alpha(2,3,succ) =E= 0
+      ; (LHS = 0)
+     
+octicon2a(2,4)..  dir(2,4) - alpha(2,4,orig) - 2*alpha(2,4,succ) =E= 0 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- octicon2b  =E=  
+
+octicon2b(2,1)..  dir(2,1) - 3*alpha(1,2,prec) - 4*alpha(1,2,orig) - 5*alpha(1,2,succ)
+      =E= 0 ; (LHS = 0)
+     
+octicon2b(3,2)..  dir(3,2) - 5*alpha(2,3,prec) - 6*alpha(2,3,orig) - 7*alpha(2,3,succ)
+      =E= 0 ; (LHS = 0)
+     
+octicon2b(3,4)..  dir(3,4) - 6*alpha(4,3,prec) - 7*alpha(4,3,orig) =E= 0 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- octicon3a  =L=  
+
+octicon3a(prec,2,4)..  y(2) - y(4) + 52*alpha(2,4,prec) =L= 52 ; (LHS = 0)
+     
+octicon3a(prec,5,6)..  y(5) - y(6) + 52*alpha(5,6,prec) =L= 52 ; (LHS = 0)
+     
+octicon3a(orig,1,2)..  y(1) - y(2) + 52*alpha(1,2,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- octicon3b  =L=  
+
+octicon3b(prec,2,4)..  - y(2) + y(4) + 52*alpha(2,4,prec) =L= 52 ; (LHS = 0)
+     
+octicon3b(prec,5,6)..  - y(5) + y(6) + 52*alpha(5,6,prec) =L= 52 ; (LHS = 0)
+     
+octicon3b(orig,1,2)..  - y(1) + y(2) + 52*alpha(1,2,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- octicon3c  =G=  
+
+octicon3c(prec,2,4)..  - x(2) + x(4) - 52*alpha(2,4,prec) =G= -50 ; (LHS = 0)
+     
+octicon3c(prec,5,6)..  - x(5) + x(6) - 52*alpha(5,6,prec) =G= -50 ; (LHS = 0)
+     
+octicon3c(orig,1,2)..  - x(1) + x(2) - 52*alpha(1,2,orig) =G= -50 ; (LHS = 0)
+     
+REMAINING 2 ENTRIES SKIPPED
+
+
+---- octicon3d  =L=  
+
+octicon3d(prec,2,3)..  z2(2) - z2(3) + 52*alpha(2,3,prec) =L= 52 ; (LHS = 0)
+     
+octicon3d(prec,4,5)..  z2(4) - z2(5) + 52*alpha(4,5,prec) =L= 52 ; (LHS = 0)
+     
+octicon3d(prec,9,7)..  - z2(7) + z2(9) + 52*alpha(9,7,prec) =L= 52 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- octicon3e  =L=  
+
+octicon3e(prec,2,3)..  - z2(2) + z2(3) + 52*alpha(2,3,prec) =L= 52 ; (LHS = 0)
+     
+octicon3e(prec,4,5)..  - z2(4) + z2(5) + 52*alpha(4,5,prec) =L= 52 ; (LHS = 0)
+     
+octicon3e(prec,9,7)..  z2(7) - z2(9) + 52*alpha(9,7,prec) =L= 52 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- octicon3f  =G=  
+
+octicon3f(prec,2,3)..  - z1(2) + z1(3) - 52*alpha(2,3,prec) =G= -50 ; (LHS = 0)
+     
+octicon3f(prec,4,5)..  - z1(4) + z1(5) - 52*alpha(4,5,prec) =G= -50 ; (LHS = 0)
+     
+octicon3f(prec,9,7)..  z1(7) - z1(9) - 52*alpha(9,7,prec) =G= -50 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- octicon3g  =L=  
+
+octicon3g(prec,4,3)..  - x(3) + x(4) + 52*alpha(4,3,prec) =L= 52 ; (LHS = 0)
+     
+octicon3g(prec,8,4)..  - x(4) + x(8) + 52*alpha(8,4,prec) =L= 52 ; (LHS = 0)
+     
+octicon3g(orig,2,3)..  x(2) - x(3) + 52*alpha(2,3,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3h  =L=  
+
+octicon3h(prec,4,3)..  x(3) - x(4) + 52*alpha(4,3,prec) =L= 52 ; (LHS = 0)
+     
+octicon3h(prec,8,4)..  x(4) - x(8) + 52*alpha(8,4,prec) =L= 52 ; (LHS = 0)
+     
+octicon3h(orig,2,3)..  - x(2) + x(3) + 52*alpha(2,3,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3i  =G=  
+
+octicon3i(prec,4,3)..  y(3) - y(4) - 52*alpha(4,3,prec) =G= -50 ; (LHS = 0)
+     
+octicon3i(prec,8,4)..  y(4) - y(8) - 52*alpha(8,4,prec) =G= -50 ; (LHS = 0)
+     
+octicon3i(orig,2,3)..  - y(2) + y(3) - 52*alpha(2,3,orig) =G= -50 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3j  =L=  
+
+octicon3j(prec,3,10)..  z1(3) - z1(10) + 52*alpha(3,10,prec) =L= 52 ; (LHS = 0)
+     
+octicon3j(prec,9,8)..  - z1(8) + z1(9) + 52*alpha(9,8,prec) =L= 52 ; (LHS = 0)
+     
+octicon3j(orig,4,3)..  - z1(3) + z1(4) + 52*alpha(4,3,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3k  =L=  
+
+octicon3k(prec,3,10)..  - z1(3) + z1(10) + 52*alpha(3,10,prec) =L= 52 ; (LHS = 0)
+     
+octicon3k(prec,9,8)..  z1(8) - z1(9) + 52*alpha(9,8,prec) =L= 52 ; (LHS = 0)
+     
+octicon3k(orig,4,3)..  z1(3) - z1(4) + 52*alpha(4,3,orig) =L= 52 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3l  =G=  
+
+octicon3l(prec,3,10)..  z2(3) - z2(10) - 52*alpha(3,10,prec) =G= -50 ; (LHS = 0)
+     
+octicon3l(prec,9,8)..  - z2(8) + z2(9) - 52*alpha(9,8,prec) =G= -50 ; (LHS = 0)
+     
+octicon3l(orig,4,3)..  - z2(3) + z2(4) - 52*alpha(4,3,orig) =G= -50 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- octicon3m  =L=  
+
+octicon3m(orig,3,10)..  y(3) - y(10) + 52*alpha(3,10,orig) =L= 52 ; (LHS = 0)
+     
+octicon3m(orig,9,8)..  - y(8) + y(9) + 52*alpha(9,8,orig) =L= 52 ; (LHS = 0)
+     
+octicon3m(succ,4,3)..  - y(3) + y(4) + 52*alpha(4,3,succ) =L= 52 ; (LHS = 0)
+     
+REMAINING ENTRY SKIPPED
+
+
+---- octicon3n  =L=  
+
+octicon3n(orig,3,10)..  - y(3) + y(10) + 52*alpha(3,10,orig) =L= 52 ; (LHS = 0)
+     
+octicon3n(orig,9,8)..  y(8) - y(9) + 52*alpha(9,8,orig) =L= 52 ; (LHS = 0)
+     
+octicon3n(succ,4,3)..  y(3) - y(4) + 52*alpha(4,3,succ) =L= 52 ; (LHS = 0)
+     
+REMAINING ENTRY SKIPPED
+
+
+---- octicon3o  =G=  
+
+octicon3o(orig,3,10)..  x(3) - x(10) - 52*alpha(3,10,orig) =G= -50 ; (LHS = 0)
+     
+octicon3o(orig,9,8)..  - x(8) + x(9) - 52*alpha(9,8,orig) =G= -50 ; (LHS = 0)
+     
+octicon3o(succ,4,3)..  - x(3) + x(4) - 52*alpha(4,3,succ) =G= -50 ; (LHS = 0)
+     
+REMAINING ENTRY SKIPPED
+
+
+---- octicon3p  =L=  
+
+octicon3p(succ,3,10)..  z2(3) - z2(10) + 52*alpha(3,10,succ) =L= 52 ; (LHS = 0)
+     
+octicon3p(succ,9,8)..  - z2(8) + z2(9) + 52*alpha(9,8,succ) =L= 52 ; (LHS = 0)
+     
+
+---- octicon3q  =L=  
+
+octicon3q(succ,3,10)..  - z2(3) + z2(10) + 52*alpha(3,10,succ) =L= 52 ; (LHS = 0)
+     
+octicon3q(succ,9,8)..  z2(8) - z2(9) + 52*alpha(9,8,succ) =L= 52 ; (LHS = 0)
+     
+
+---- octicon3r  =G=  
+
+octicon3r(succ,3,10)..  z1(3) - z1(10) - 52*alpha(3,10,succ) =G= -50 ; (LHS = 0)
+     
+octicon3r(succ,9,8)..  - z1(8) + z1(9) - 52*alpha(9,8,succ) =G= -50 ; (LHS = 0)
+     
+
+---- octicon3s  =L=  
+
+                NONE
+
+
+---- octicon3t  =L=  
+
+                NONE
+
+
+---- octicon3u  =G=  
+
+                NONE
+
+
+---- octicon3v  =L=  
+
+octicon3v(prec,1,2)..  z1(1) - z1(2) + 52*alpha(1,2,prec) =L= 52 ; (LHS = 0)
+     
+octicon3v(prec,3,5)..  z1(3) - z1(5) + 52*alpha(3,5,prec) =L= 52 ; (LHS = 0)
+     
+octicon3v(prec,5,7)..  z1(5) - z1(7) + 52*alpha(5,7,prec) =L= 52 ; (LHS = 0)
+     
+
+---- octicon3w  =L=  
+
+octicon3w(prec,1,2)..  - z1(1) + z1(2) + 52*alpha(1,2,prec) =L= 52 ; (LHS = 0)
+     
+octicon3w(prec,3,5)..  - z1(3) + z1(5) + 52*alpha(3,5,prec) =L= 52 ; (LHS = 0)
+     
+octicon3w(prec,5,7)..  - z1(5) + z1(7) + 52*alpha(5,7,prec) =L= 52 ; (LHS = 0)
+     
+
+---- octicon3x  =G=  
+
+octicon3x(prec,1,2)..  - z2(1) + z2(2) - 52*alpha(1,2,prec) =G= -50 ; (LHS = 0)
+     
+octicon3x(prec,3,5)..  - z2(3) + z2(5) - 52*alpha(3,5,prec) =G= -50 ; (LHS = 0)
+     
+octicon3x(prec,5,7)..  - z2(5) + z2(7) - 52*alpha(5,7,prec) =G= -50 ; (LHS = 0)
+     
+
+---- cvocon1  =E=  
+
+cvocon1(2)..  beta(2,1) + beta(2,3) + beta(2,4) =E= 1 ; (LHS = 0, INFES = 1 ****)
+     
+cvocon1(3)..  beta(3,2) + beta(3,4) + beta(3,5) + beta(3,10) =E= 1 ;
+     
+      (LHS = 0, INFES = 1 ****)
+     
+cvocon1(4)..  beta(4,2) + beta(4,3) + beta(4,5) + beta(4,8) =E= 1 ;
+     
+      (LHS = 0, INFES = 1 ****)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- cvocon2a  =L=  
+
+cvocon2a..  - dir(2,3) + dir(2,4) - 8*beta(2,4) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon2b  =L=  
+
+cvocon2b..  - dir(2,1) + dir(2,3) - 8*beta(2,3) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon2c  =L=  
+
+cvocon2c..  dir(2,1) - dir(2,4) - 8*beta(2,1) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon3a  =L=  
+
+cvocon3a..  dir(3,5) - dir(3,10) - 8*beta(3,5) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon3b  =L=  
+
+cvocon3b..  - dir(3,2) + dir(3,10) - 8*beta(3,10) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon3c  =L=  
+
+cvocon3c..  dir(3,2) - dir(3,4) - 8*beta(3,2) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon3d  =L=  
+
+cvocon3d..  dir(3,4) - dir(3,5) - 8*beta(3,4) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon4a  =L=  
+
+cvocon4a..  - dir(4,3) + dir(4,5) - 8*beta(4,5) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon4b  =L=  
+
+cvocon4b..  - dir(4,2) + dir(4,3) - 8*beta(4,3) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon4c  =L=  
+
+cvocon4c..  dir(4,2) - dir(4,8) - 8*beta(4,2) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon4d  =L=  
+
+cvocon4d..  - dir(4,5) + dir(4,8) - 8*beta(4,8) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon5a  =L=  
+
+cvocon5a..  - dir(5,6) + dir(5,7) - 8*beta(5,7) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon5b  =L=  
+
+cvocon5b..  - dir(5,3) + dir(5,6) - 8*beta(5,6) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon5c  =L=  
+
+cvocon5c..  dir(5,3) - dir(5,4) - 8*beta(5,3) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon5d  =L=  
+
+cvocon5d..  dir(5,4) - dir(5,7) - 8*beta(5,4) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon7a  =L=  
+
+cvocon7a..  dir(7,5) - dir(7,9) - 8*beta(7,5) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon7b  =L=  
+
+cvocon7b..  - dir(7,5) + dir(7,9) - 8*beta(7,9) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon8a  =L=  
+
+cvocon8a..  - dir(8,4) + dir(8,9) - 8*beta(8,9) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon8b  =L=  
+
+cvocon8b..  dir(8,4) - dir(8,9) - 8*beta(8,4) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon9a  =L=  
+
+cvocon9a..  dir(9,7) - dir(9,8) - 8*beta(9,7) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon9b  =L=  
+
+cvocon9b..  - dir(9,7) + dir(9,8) - 8*beta(9,8) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon10a  =L=  
+
+cvocon10a..  dir(10,3) - dir(10,11) - 8*beta(10,3) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- cvocon10b  =L=  
+
+cvocon10b..  - dir(10,3) + dir(10,11) - 8*beta(10,11) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+
+---- edgecon  =G=  
+
+edgecon(1,2,3,10)..  gamma(1,2,3,10,N) + gamma(1,2,3,10,S) + gamma(1,2,3,10,E)
+     
+      + gamma(1,2,3,10,W) + gamma(1,2,3,10,NE) + gamma(1,2,3,10,NW) + gamma(1,2,3,10,SE)
+     
+      + gamma(1,2,3,10,SW) =G= 1 ; (LHS = 0, INFES = 1 ****)
+     
+edgecon(1,2,5,6)..  gamma(1,2,5,6,N) + gamma(1,2,5,6,S) + gamma(1,2,5,6,E)
+     
+      + gamma(1,2,5,6,W) + gamma(1,2,5,6,NE) + gamma(1,2,5,6,NW) + gamma(1,2,5,6,SE)
+     
+      + gamma(1,2,5,6,SW) =G= 1 ; (LHS = 0, INFES = 1 ****)
+     
+edgecon(1,2,10,11)..  gamma(1,2,10,11,N) + gamma(1,2,10,11,S) + gamma(1,2,10,11,E)
+     
+      + gamma(1,2,10,11,W) + gamma(1,2,10,11,NE) + gamma(1,2,10,11,NW)
+     
+      + gamma(1,2,10,11,SE) + gamma(1,2,10,11,SW) =G= 1 ; (LHS = 0, INFES = 1 ****)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconE1  =L=  
+
+edgeconE1(1,2,3,10)..  - x(1) + x(3) + 52*gamma(1,2,3,10,E) =L= 51 ; (LHS = 0)
+     
+edgeconE1(1,2,5,6)..  - x(1) + x(5) + 52*gamma(1,2,5,6,E) =L= 51 ; (LHS = 0)
+     
+edgeconE1(1,2,10,11)..  - x(1) + x(10) + 52*gamma(1,2,10,11,E) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconE2  =L=  
+
+edgeconE2(1,2,3,10)..  - x(2) + x(3) + 52*gamma(1,2,3,10,E) =L= 51 ; (LHS = 0)
+     
+edgeconE2(1,2,5,6)..  - x(2) + x(5) + 52*gamma(1,2,5,6,E) =L= 51 ; (LHS = 0)
+     
+edgeconE2(1,2,10,11)..  - x(2) + x(10) + 52*gamma(1,2,10,11,E) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconE3  =L=  
+
+edgeconE3(1,2,3,10)..  - x(1) + x(10) + 52*gamma(1,2,3,10,E) =L= 51 ; (LHS = 0)
+     
+edgeconE3(1,2,5,6)..  - x(1) + x(6) + 52*gamma(1,2,5,6,E) =L= 51 ; (LHS = 0)
+     
+edgeconE3(1,2,10,11)..  - x(1) + x(11) + 52*gamma(1,2,10,11,E) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconE4  =L=  
+
+edgeconE4(1,2,3,10)..  - x(2) + x(10) + 52*gamma(1,2,3,10,E) =L= 51 ; (LHS = 0)
+     
+edgeconE4(1,2,5,6)..  - x(2) + x(6) + 52*gamma(1,2,5,6,E) =L= 51 ; (LHS = 0)
+     
+edgeconE4(1,2,10,11)..  - x(2) + x(11) + 52*gamma(1,2,10,11,E) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNE1  =L=  
+
+edgeconNE1(1,2,3,10)..  - z1(1) + z1(3) + 52*gamma(1,2,3,10,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE1(1,2,5,6)..  - z1(1) + z1(5) + 52*gamma(1,2,5,6,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE1(1,2,10,11)..  - z1(1) + z1(10) + 52*gamma(1,2,10,11,NE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNE2  =L=  
+
+edgeconNE2(1,2,3,10)..  - z1(2) + z1(3) + 52*gamma(1,2,3,10,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE2(1,2,5,6)..  - z1(2) + z1(5) + 52*gamma(1,2,5,6,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE2(1,2,10,11)..  - z1(2) + z1(10) + 52*gamma(1,2,10,11,NE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNE3  =L=  
+
+edgeconNE3(1,2,3,10)..  - z1(1) + z1(10) + 52*gamma(1,2,3,10,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE3(1,2,5,6)..  - z1(1) + z1(6) + 52*gamma(1,2,5,6,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE3(1,2,10,11)..  - z1(1) + z1(11) + 52*gamma(1,2,10,11,NE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNE4  =L=  
+
+edgeconNE4(1,2,3,10)..  - z1(2) + z1(10) + 52*gamma(1,2,3,10,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE4(1,2,5,6)..  - z1(2) + z1(6) + 52*gamma(1,2,5,6,NE) =L= 51 ; (LHS = 0)
+     
+edgeconNE4(1,2,10,11)..  - z1(2) + z1(11) + 52*gamma(1,2,10,11,NE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconN1  =L=  
+
+edgeconN1(1,2,3,10)..  - y(1) + y(3) + 52*gamma(1,2,3,10,N) =L= 51 ; (LHS = 0)
+     
+edgeconN1(1,2,5,6)..  - y(1) + y(5) + 52*gamma(1,2,5,6,N) =L= 51 ; (LHS = 0)
+     
+edgeconN1(1,2,10,11)..  - y(1) + y(10) + 52*gamma(1,2,10,11,N) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconN2  =L=  
+
+edgeconN2(1,2,3,10)..  - y(2) + y(3) + 52*gamma(1,2,3,10,N) =L= 51 ; (LHS = 0)
+     
+edgeconN2(1,2,5,6)..  - y(2) + y(5) + 52*gamma(1,2,5,6,N) =L= 51 ; (LHS = 0)
+     
+edgeconN2(1,2,10,11)..  - y(2) + y(10) + 52*gamma(1,2,10,11,N) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconN3  =L=  
+
+edgeconN3(1,2,3,10)..  - y(1) + y(10) + 52*gamma(1,2,3,10,N) =L= 51 ; (LHS = 0)
+     
+edgeconN3(1,2,5,6)..  - y(1) + y(6) + 52*gamma(1,2,5,6,N) =L= 51 ; (LHS = 0)
+     
+edgeconN3(1,2,10,11)..  - y(1) + y(11) + 52*gamma(1,2,10,11,N) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconN4  =L=  
+
+edgeconN4(1,2,3,10)..  - y(2) + y(10) + 52*gamma(1,2,3,10,N) =L= 51 ; (LHS = 0)
+     
+edgeconN4(1,2,5,6)..  - y(2) + y(6) + 52*gamma(1,2,5,6,N) =L= 51 ; (LHS = 0)
+     
+edgeconN4(1,2,10,11)..  - y(2) + y(11) + 52*gamma(1,2,10,11,N) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNW1  =L=  
+
+edgeconNW1(1,2,3,10)..  z2(1) - z2(3) + 52*gamma(1,2,3,10,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW1(1,2,5,6)..  z2(1) - z2(5) + 52*gamma(1,2,5,6,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW1(1,2,10,11)..  z2(1) - z2(10) + 52*gamma(1,2,10,11,NW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNW2  =L=  
+
+edgeconNW2(1,2,3,10)..  z2(2) - z2(3) + 52*gamma(1,2,3,10,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW2(1,2,5,6)..  z2(2) - z2(5) + 52*gamma(1,2,5,6,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW2(1,2,10,11)..  z2(2) - z2(10) + 52*gamma(1,2,10,11,NW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNW3  =L=  
+
+edgeconNW3(1,2,3,10)..  z2(1) - z2(10) + 52*gamma(1,2,3,10,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW3(1,2,5,6)..  z2(1) - z2(6) + 52*gamma(1,2,5,6,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW3(1,2,10,11)..  z2(1) - z2(11) + 52*gamma(1,2,10,11,NW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconNW4  =L=  
+
+edgeconNW4(1,2,3,10)..  z2(2) - z2(10) + 52*gamma(1,2,3,10,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW4(1,2,5,6)..  z2(2) - z2(6) + 52*gamma(1,2,5,6,NW) =L= 51 ; (LHS = 0)
+     
+edgeconNW4(1,2,10,11)..  z2(2) - z2(11) + 52*gamma(1,2,10,11,NW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconW1  =L=  
+
+edgeconW1(1,2,3,10)..  x(1) - x(3) + 52*gamma(1,2,3,10,W) =L= 51 ; (LHS = 0)
+     
+edgeconW1(1,2,5,6)..  x(1) - x(5) + 52*gamma(1,2,5,6,W) =L= 51 ; (LHS = 0)
+     
+edgeconW1(1,2,10,11)..  x(1) - x(10) + 52*gamma(1,2,10,11,W) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconW2  =L=  
+
+edgeconW2(1,2,3,10)..  x(2) - x(3) + 52*gamma(1,2,3,10,W) =L= 51 ; (LHS = 0)
+     
+edgeconW2(1,2,5,6)..  x(2) - x(5) + 52*gamma(1,2,5,6,W) =L= 51 ; (LHS = 0)
+     
+edgeconW2(1,2,10,11)..  x(2) - x(10) + 52*gamma(1,2,10,11,W) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconW3  =L=  
+
+edgeconW3(1,2,3,10)..  x(1) - x(10) + 52*gamma(1,2,3,10,W) =L= 51 ; (LHS = 0)
+     
+edgeconW3(1,2,5,6)..  x(1) - x(6) + 52*gamma(1,2,5,6,W) =L= 51 ; (LHS = 0)
+     
+edgeconW3(1,2,10,11)..  x(1) - x(11) + 52*gamma(1,2,10,11,W) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconW4  =L=  
+
+edgeconW4(1,2,3,10)..  x(2) - x(10) + 52*gamma(1,2,3,10,W) =L= 51 ; (LHS = 0)
+     
+edgeconW4(1,2,5,6)..  x(2) - x(6) + 52*gamma(1,2,5,6,W) =L= 51 ; (LHS = 0)
+     
+edgeconW4(1,2,10,11)..  x(2) - x(11) + 52*gamma(1,2,10,11,W) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSW1  =L=  
+
+edgeconSW1(1,2,3,10)..  z1(1) - z1(3) + 52*gamma(1,2,3,10,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW1(1,2,5,6)..  z1(1) - z1(5) + 52*gamma(1,2,5,6,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW1(1,2,10,11)..  z1(1) - z1(10) + 52*gamma(1,2,10,11,SW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSW2  =L=  
+
+edgeconSW2(1,2,3,10)..  z1(2) - z1(3) + 52*gamma(1,2,3,10,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW2(1,2,5,6)..  z1(2) - z1(5) + 52*gamma(1,2,5,6,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW2(1,2,10,11)..  z1(2) - z1(10) + 52*gamma(1,2,10,11,SW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSW3  =L=  
+
+edgeconSW3(1,2,3,10)..  z1(1) - z1(10) + 52*gamma(1,2,3,10,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW3(1,2,5,6)..  z1(1) - z1(6) + 52*gamma(1,2,5,6,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW3(1,2,10,11)..  z1(1) - z1(11) + 52*gamma(1,2,10,11,SW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSW4  =L=  
+
+edgeconSW4(1,2,3,10)..  z1(2) - z1(10) + 52*gamma(1,2,3,10,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW4(1,2,5,6)..  z1(2) - z1(6) + 52*gamma(1,2,5,6,SW) =L= 51 ; (LHS = 0)
+     
+edgeconSW4(1,2,10,11)..  z1(2) - z1(11) + 52*gamma(1,2,10,11,SW) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconS1  =L=  
+
+edgeconS1(1,2,3,10)..  y(1) - y(3) + 52*gamma(1,2,3,10,S) =L= 51 ; (LHS = 0)
+     
+edgeconS1(1,2,5,6)..  y(1) - y(5) + 52*gamma(1,2,5,6,S) =L= 51 ; (LHS = 0)
+     
+edgeconS1(1,2,10,11)..  y(1) - y(10) + 52*gamma(1,2,10,11,S) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconS2  =L=  
+
+edgeconS2(1,2,3,10)..  y(2) - y(3) + 52*gamma(1,2,3,10,S) =L= 51 ; (LHS = 0)
+     
+edgeconS2(1,2,5,6)..  y(2) - y(5) + 52*gamma(1,2,5,6,S) =L= 51 ; (LHS = 0)
+     
+edgeconS2(1,2,10,11)..  y(2) - y(10) + 52*gamma(1,2,10,11,S) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconS3  =L=  
+
+edgeconS3(1,2,3,10)..  y(1) - y(10) + 52*gamma(1,2,3,10,S) =L= 51 ; (LHS = 0)
+     
+edgeconS3(1,2,5,6)..  y(1) - y(6) + 52*gamma(1,2,5,6,S) =L= 51 ; (LHS = 0)
+     
+edgeconS3(1,2,10,11)..  y(1) - y(11) + 52*gamma(1,2,10,11,S) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconS4  =L=  
+
+edgeconS4(1,2,3,10)..  y(2) - y(10) + 52*gamma(1,2,3,10,S) =L= 51 ; (LHS = 0)
+     
+edgeconS4(1,2,5,6)..  y(2) - y(6) + 52*gamma(1,2,5,6,S) =L= 51 ; (LHS = 0)
+     
+edgeconS4(1,2,10,11)..  y(2) - y(11) + 52*gamma(1,2,10,11,S) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSE1  =L=  
+
+edgeconSE1(1,2,3,10)..  - z2(1) + z2(3) + 52*gamma(1,2,3,10,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE1(1,2,5,6)..  - z2(1) + z2(5) + 52*gamma(1,2,5,6,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE1(1,2,10,11)..  - z2(1) + z2(10) + 52*gamma(1,2,10,11,SE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSE2  =L=  
+
+edgeconSE2(1,2,3,10)..  - z2(2) + z2(3) + 52*gamma(1,2,3,10,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE2(1,2,5,6)..  - z2(2) + z2(5) + 52*gamma(1,2,5,6,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE2(1,2,10,11)..  - z2(2) + z2(10) + 52*gamma(1,2,10,11,SE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSE3  =L=  
+
+edgeconSE3(1,2,3,10)..  - z2(1) + z2(10) + 52*gamma(1,2,3,10,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE3(1,2,5,6)..  - z2(1) + z2(6) + 52*gamma(1,2,5,6,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE3(1,2,10,11)..  - z2(1) + z2(11) + 52*gamma(1,2,10,11,SE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- edgeconSE4  =L=  
+
+edgeconSE4(1,2,3,10)..  - z2(2) + z2(10) + 52*gamma(1,2,3,10,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE4(1,2,5,6)..  - z2(2) + z2(6) + 52*gamma(1,2,5,6,SE) =L= 51 ; (LHS = 0)
+     
+edgeconSE4(1,2,10,11)..  - z2(2) + z2(11) + 52*gamma(1,2,10,11,SE) =L= 51 ; (LHS = 0)
+     
+REMAINING 5 ENTRIES SKIPPED
+
+
+---- telcon1  =L=  
+
+telcon1(1,2)..  x(1) - x(2) =L= 4 ; (LHS = 0)
+     
+telcon1(2,3)..  x(2) - x(3) =L= 4 ; (LHS = 0)
+     
+telcon1(2,4)..  x(2) - x(4) =L= 4 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- telcon2  =L=  
+
+telcon2(1,2)..  - x(1) + x(2) =L= 4 ; (LHS = 0)
+     
+telcon2(2,3)..  - x(2) + x(3) =L= 4 ; (LHS = 0)
+     
+telcon2(2,4)..  - x(2) + x(4) =L= 4 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- telcon3  =L=  
+
+telcon3(1,2)..  y(1) - y(2) =L= 4 ; (LHS = 0)
+     
+telcon3(2,3)..  y(2) - y(3) =L= 4 ; (LHS = 0)
+     
+telcon3(2,4)..  y(2) - y(4) =L= 4 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- telcon4  =L=  
+
+telcon4(1,2)..  - y(1) + y(2) =L= 4 ; (LHS = 0)
+     
+telcon4(2,3)..  - y(2) + y(3) =L= 4 ; (LHS = 0)
+     
+telcon4(2,4)..  - y(2) + y(4) =L= 4 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- rposcon1  =G=  
+
+rposcon1(1,2)..  - dir(1,2) + 52*rpos(1,2) =G= 0 ; (LHS = 0)
+     
+rposcon1(2,3)..  - dir(2,3) + 52*rpos(2,3) =G= -2 ; (LHS = 0)
+     
+rposcon1(2,4)..  - dir(2,4) + 52*rpos(2,4) =G= -1 ; (LHS = 0)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- rposcon2  =L=  
+
+rposcon2(1,2)..  - dir(1,2) - 52*rpos(1,2) =L= 0 ; (LHS = 0)
+     
+rposcon2(2,3)..  - dir(2,3) - 52*rpos(2,3) =L= -2 ; (LHS = 0, INFES = 2 ****)
+     
+rposcon2(2,4)..  - dir(2,4) - 52*rpos(2,4) =L= -1 ; (LHS = 0, INFES = 1 ****)
+     
+REMAINING 10 ENTRIES SKIPPED
+
+
+---- ddi  =E=  
+
+ddi(1,1,2,4)..  deltadir(1,1,2,4) - dir(1,2) + dir(2,4) =E= 0 ; (LHS = 0)
+     
+ddi(1,2,4,5)..  deltadir(1,2,4,5) - dir(2,4) + dir(4,5) =E= 0 ; (LHS = 0)
+     
+ddi(1,4,5,6)..  deltadir(1,4,5,6) - dir(4,5) + dir(5,6) =E= 0 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- bendcon1  =G=  
+
+bendcon1(1,1,2,4)..  - deltadir(1,1,2,4) + bd(1,1,2,4) + 8*delta1(1,1,2,4)
+     
+      - 8*delta2(1,1,2,4) =G= 0 ; (LHS = 0)
+     
+bendcon1(1,2,4,5)..  - deltadir(1,2,4,5) + bd(1,2,4,5) + 8*delta1(1,2,4,5)
+     
+      - 8*delta2(1,2,4,5) =G= 0 ; (LHS = 0)
+     
+bendcon1(1,4,5,6)..  - deltadir(1,4,5,6) + bd(1,4,5,6) + 8*delta1(1,4,5,6)
+     
+      - 8*delta2(1,4,5,6) =G= 0 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- bendcon2  =L=  
+
+bendcon2(1,1,2,4)..  - deltadir(1,1,2,4) - bd(1,1,2,4) + 8*delta1(1,1,2,4)
+     
+      - 8*delta2(1,1,2,4) =L= 0 ; (LHS = 0)
+     
+bendcon2(1,2,4,5)..  - deltadir(1,2,4,5) - bd(1,2,4,5) + 8*delta1(1,2,4,5)
+     
+      - 8*delta2(1,2,4,5) =L= 0 ; (LHS = 0)
+     
+bendcon2(1,4,5,6)..  - deltadir(1,4,5,6) - bd(1,4,5,6) + 8*delta1(1,4,5,6)
+     
+      - 8*delta2(1,4,5,6) =L= 0 ; (LHS = 0)
+     
+REMAINING 6 ENTRIES SKIPPED
+
+
+---- objbend  =E=  
+
+objbend..  cs1 - bd(1,1,2,4) - bd(1,2,4,5) - bd(1,4,5,6) - bd(2,2,3,5) - bd(2,3,5,7)
+     
+      - bd(3,3,10,11) - bd(3,4,3,10) - bd(3,8,4,3) - bd(3,9,8,4) =E= 0 ; (LHS = 0)
+     
+
+---- objrpos  =E=  
+
+objrpos..  cs2 - rpos(1,2) - rpos(2,3) - rpos(2,4) - rpos(3,5) - rpos(3,10) - rpos(4,3)
+     
+      - rpos(4,5) - rpos(5,6) - rpos(5,7) - rpos(8,4) - rpos(9,7) - rpos(9,8)
+     
+      - rpos(10,11) =E= 0 ; (LHS = 0)
+     
+
+---- obj  =E=  
+
+obj..  Z - (0.0001)*cs1 - (0.9999)*cs2 + (0)*weight_var(1) + (0)*weight_var(2) =E= 0 ;
+     
+      (LHS = 0)
+     
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 4
+"M E T R O  M A P  A U T O M A T I O N"
+Column Listing      SOLVE automap Using MIP From line 516
+
+
+---- Z  total cost
+
+Z
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       obj
+
+
+---- z2  -45 degree coordinate
+
+z2(1)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       defz2(1)
+        1       octicon3d(succ,1,2)
+       -1       octicon3e(succ,1,2)
+       -1       octicon3x(prec,1,2)
+        1       edgeconNW1(1,2,3,10)
+        1       edgeconNW1(1,2,5,6)
+        1       edgeconNW1(1,2,10,11)
+        1       edgeconNW3(1,2,3,10)
+        1       edgeconNW3(1,2,5,6)
+        1       edgeconNW3(1,2,10,11)
+       -1       edgeconSE1(1,2,3,10)
+       -1       edgeconSE1(1,2,5,6)
+       -1       edgeconSE1(1,2,10,11)
+       -1       edgeconSE3(1,2,3,10)
+       -1       edgeconSE3(1,2,5,6)
+       -1       edgeconSE3(1,2,10,11)
+
+z2(2)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       defz2(2)
+        1       octicon3d(prec,2,3)
+        1       octicon3d(orig,2,4)
+       -1       octicon3d(succ,1,2)
+       -1       octicon3e(prec,2,3)
+       -1       octicon3e(orig,2,4)
+        1       octicon3e(succ,1,2)
+        1       octicon3l(succ,2,3)
+        1       octicon3x(prec,1,2)
+        1       edgeconNW2(1,2,3,10)
+        1       edgeconNW2(1,2,5,6)
+        1       edgeconNW2(1,2,10,11)
+        1       edgeconNW4(1,2,3,10)
+        1       edgeconNW4(1,2,5,6)
+        1       edgeconNW4(1,2,10,11)
+       -1       edgeconSE2(1,2,3,10)
+       -1       edgeconSE2(1,2,5,6)
+       -1       edgeconSE2(1,2,10,11)
+       -1       edgeconSE4(1,2,3,10)
+       -1       edgeconSE4(1,2,5,6)
+       -1       edgeconSE4(1,2,10,11)
+
+z2(3)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       defz2(3)
+       -1       octicon3d(prec,2,3)
+        1       octicon3d(succ,3,5)
+        1       octicon3e(prec,2,3)
+       -1       octicon3e(succ,3,5)
+        1       octicon3l(prec,3,10)
+       -1       octicon3l(orig,4,3)
+       -1       octicon3l(succ,2,3)
+        1       octicon3p(succ,3,10)
+       -1       octicon3q(succ,3,10)
+       -1       octicon3x(prec,3,5)
+       -1       edgeconNW1(1,2,3,10)
+       -1       edgeconNW2(1,2,3,10)
+        1       edgeconSE1(1,2,3,10)
+        1       edgeconSE2(1,2,3,10)
+
+REMAINING 8 ENTRIES SKIPPED
+
+---- deltadir  sector difference btw adjacent egdes uv and uw as measure of angle btw
+
+deltadir(1,1,2,4)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       ddi(1,1,2,4)
+       -1       bendcon1(1,1,2,4)
+       -1       bendcon2(1,1,2,4)
+
+deltadir(1,2,4,5)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       ddi(1,2,4,5)
+       -1       bendcon1(1,2,4,5)
+       -1       bendcon2(1,2,4,5)
+
+deltadir(1,4,5,6)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       ddi(1,4,5,6)
+       -1       bendcon1(1,4,5,6)
+       -1       bendcon2(1,4,5,6)
+
+REMAINING 6 ENTRIES SKIPPED
+
+---- x  x coordinate
+
+x(1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       xlim(1)
+       -0.5     defz1(1)
+       -0.5     defz2(1)
+       -1       octicon3c(orig,1,2)
+       -1       edgeconE1(1,2,3,10)
+       -1       edgeconE1(1,2,5,6)
+       -1       edgeconE1(1,2,10,11)
+       -1       edgeconE3(1,2,3,10)
+       -1       edgeconE3(1,2,5,6)
+       -1       edgeconE3(1,2,10,11)
+        1       edgeconW1(1,2,3,10)
+        1       edgeconW1(1,2,5,6)
+        1       edgeconW1(1,2,10,11)
+        1       edgeconW3(1,2,3,10)
+        1       edgeconW3(1,2,5,6)
+        1       edgeconW3(1,2,10,11)
+        1       telcon1(1,2)
+       -1       telcon2(1,2)
+
+x(2)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       xlim(2)
+       -0.5     defz1(2)
+       -0.5     defz2(2)
+       -1       octicon3c(prec,2,4)
+        1       octicon3c(orig,1,2)
+        1       octicon3g(orig,2,3)
+        1       octicon3g(succ,2,4)
+       -1       octicon3h(orig,2,3)
+       -1       octicon3h(succ,2,4)
+       -1       edgeconE2(1,2,3,10)
+       -1       edgeconE2(1,2,5,6)
+       -1       edgeconE2(1,2,10,11)
+       -1       edgeconE4(1,2,3,10)
+       -1       edgeconE4(1,2,5,6)
+       -1       edgeconE4(1,2,10,11)
+        1       edgeconW2(1,2,3,10)
+        1       edgeconW2(1,2,5,6)
+        1       edgeconW2(1,2,10,11)
+        1       edgeconW4(1,2,3,10)
+        1       edgeconW4(1,2,5,6)
+        1       edgeconW4(1,2,10,11)
+       -1       telcon1(1,2)
+        1       telcon1(2,3)
+        1       telcon1(2,4)
+        1       telcon2(1,2)
+       -1       telcon2(2,3)
+       -1       telcon2(2,4)
+
+x(3)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       xlim(3)
+       -0.5     defz1(3)
+       -0.5     defz2(3)
+       -1       octicon3c(orig,3,5)
+       -1       octicon3g(prec,4,3)
+       -1       octicon3g(orig,2,3)
+        1       octicon3h(prec,4,3)
+        1       octicon3h(orig,2,3)
+        1       octicon3o(orig,3,10)
+       -1       octicon3o(succ,4,3)
+        1       edgeconE1(1,2,3,10)
+        1       edgeconE2(1,2,3,10)
+       -1       edgeconW1(1,2,3,10)
+       -1       edgeconW2(1,2,3,10)
+       -1       telcon1(2,3)
+        1       telcon1(3,5)
+        1       telcon1(3,10)
+       -1       telcon1(4,3)
+        1       telcon2(2,3)
+       -1       telcon2(3,5)
+       -1       telcon2(3,10)
+        1       telcon2(4,3)
+
+REMAINING 8 ENTRIES SKIPPED
+
+---- y  y coordinate
+
+y(1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       ylim(1)
+       -0.5     defz1(1)
+        0.5     defz2(1)
+        1       octicon3a(orig,1,2)
+       -1       octicon3b(orig,1,2)
+       -1       edgeconN1(1,2,3,10)
+       -1       edgeconN1(1,2,5,6)
+       -1       edgeconN1(1,2,10,11)
+       -1       edgeconN3(1,2,3,10)
+       -1       edgeconN3(1,2,5,6)
+       -1       edgeconN3(1,2,10,11)
+        1       edgeconS1(1,2,3,10)
+        1       edgeconS1(1,2,5,6)
+        1       edgeconS1(1,2,10,11)
+        1       edgeconS3(1,2,3,10)
+        1       edgeconS3(1,2,5,6)
+        1       edgeconS3(1,2,10,11)
+        1       telcon3(1,2)
+       -1       telcon4(1,2)
+
+y(2)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       ylim(2)
+       -0.5     defz1(2)
+        0.5     defz2(2)
+        1       octicon3a(prec,2,4)
+       -1       octicon3a(orig,1,2)
+       -1       octicon3b(prec,2,4)
+        1       octicon3b(orig,1,2)
+       -1       octicon3i(orig,2,3)
+       -1       octicon3i(succ,2,4)
+       -1       edgeconN2(1,2,3,10)
+       -1       edgeconN2(1,2,5,6)
+       -1       edgeconN2(1,2,10,11)
+       -1       edgeconN4(1,2,3,10)
+       -1       edgeconN4(1,2,5,6)
+       -1       edgeconN4(1,2,10,11)
+        1       edgeconS2(1,2,3,10)
+        1       edgeconS2(1,2,5,6)
+        1       edgeconS2(1,2,10,11)
+        1       edgeconS4(1,2,3,10)
+        1       edgeconS4(1,2,5,6)
+        1       edgeconS4(1,2,10,11)
+       -1       telcon3(1,2)
+        1       telcon3(2,3)
+        1       telcon3(2,4)
+        1       telcon4(1,2)
+       -1       telcon4(2,3)
+       -1       telcon4(2,4)
+
+y(3)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       ylim(3)
+       -0.5     defz1(3)
+        0.5     defz2(3)
+        1       octicon3a(orig,3,5)
+       -1       octicon3b(orig,3,5)
+        1       octicon3i(prec,4,3)
+        1       octicon3i(orig,2,3)
+        1       octicon3m(orig,3,10)
+       -1       octicon3m(succ,4,3)
+       -1       octicon3n(orig,3,10)
+        1       octicon3n(succ,4,3)
+        1       edgeconN1(1,2,3,10)
+        1       edgeconN2(1,2,3,10)
+       -1       edgeconS1(1,2,3,10)
+       -1       edgeconS2(1,2,3,10)
+       -1       telcon3(2,3)
+        1       telcon3(3,5)
+        1       telcon3(3,10)
+       -1       telcon3(4,3)
+        1       telcon4(2,3)
+       -1       telcon4(3,5)
+       -1       telcon4(3,10)
+        1       telcon4(4,3)
+
+REMAINING 8 ENTRIES SKIPPED
+
+---- z1  +45 degree coordinate
+
+z1(1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       defz1(1)
+       -1       octicon3f(succ,1,2)
+        1       octicon3v(prec,1,2)
+       -1       octicon3w(prec,1,2)
+       -1       edgeconNE1(1,2,3,10)
+       -1       edgeconNE1(1,2,5,6)
+       -1       edgeconNE1(1,2,10,11)
+       -1       edgeconNE3(1,2,3,10)
+       -1       edgeconNE3(1,2,5,6)
+       -1       edgeconNE3(1,2,10,11)
+        1       edgeconSW1(1,2,3,10)
+        1       edgeconSW1(1,2,5,6)
+        1       edgeconSW1(1,2,10,11)
+        1       edgeconSW3(1,2,3,10)
+        1       edgeconSW3(1,2,5,6)
+        1       edgeconSW3(1,2,10,11)
+
+z1(2)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       defz1(2)
+       -1       octicon3f(prec,2,3)
+       -1       octicon3f(orig,2,4)
+        1       octicon3f(succ,1,2)
+        1       octicon3j(succ,2,3)
+       -1       octicon3k(succ,2,3)
+       -1       octicon3v(prec,1,2)
+        1       octicon3w(prec,1,2)
+       -1       edgeconNE2(1,2,3,10)
+       -1       edgeconNE2(1,2,5,6)
+       -1       edgeconNE2(1,2,10,11)
+       -1       edgeconNE4(1,2,3,10)
+       -1       edgeconNE4(1,2,5,6)
+       -1       edgeconNE4(1,2,10,11)
+        1       edgeconSW2(1,2,3,10)
+        1       edgeconSW2(1,2,5,6)
+        1       edgeconSW2(1,2,10,11)
+        1       edgeconSW4(1,2,3,10)
+        1       edgeconSW4(1,2,5,6)
+        1       edgeconSW4(1,2,10,11)
+
+z1(3)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       defz1(3)
+        1       octicon3f(prec,2,3)
+       -1       octicon3f(succ,3,5)
+        1       octicon3j(prec,3,10)
+       -1       octicon3j(orig,4,3)
+       -1       octicon3j(succ,2,3)
+       -1       octicon3k(prec,3,10)
+        1       octicon3k(orig,4,3)
+        1       octicon3k(succ,2,3)
+        1       octicon3r(succ,3,10)
+        1       octicon3v(prec,3,5)
+       -1       octicon3w(prec,3,5)
+        1       edgeconNE1(1,2,3,10)
+        1       edgeconNE2(1,2,3,10)
+       -1       edgeconSW1(1,2,3,10)
+       -1       edgeconSW2(1,2,3,10)
+
+REMAINING 8 ENTRIES SKIPPED
+
+---- dir  octilinear direction of edge uv
+
+dir(1,2)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       octicon2a(1,2)
+       -1       rposcon1(1,2)
+       -1       rposcon2(1,2)
+       -1       ddi(1,1,2,4)
+
+dir(2,1)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       octicon2b(2,1)
+       -1       cvocon2b
+        1       cvocon2c
+
+dir(2,3)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       octicon2a(2,3)
+       -1       cvocon2a
+        1       cvocon2b
+       -1       rposcon1(2,3)
+       -1       rposcon2(2,3)
+       -1       ddi(2,2,3,5)
+
+REMAINING 23 ENTRIES SKIPPED
+
+---- cs1  total line bend cost
+
+cs1
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       objbend
+      (-0.0001) obj
+
+
+---- cs2  total relative position cost
+
+cs2
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       objrpos
+      (-0.9999) obj
+
+
+---- bd  bend cost of angle between uv and vw
+
+bd(1,1,2,4)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       bendcon1(1,1,2,4)
+       -1       bendcon2(1,1,2,4)
+       -1       objbend
+
+bd(1,2,4,5)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       bendcon1(1,2,4,5)
+       -1       bendcon2(1,2,4,5)
+       -1       objbend
+
+bd(1,4,5,6)
+                (.LO, .L, .UP, .M = 0, 0, +INF, 0)
+        1       bendcon1(1,4,5,6)
+       -1       bendcon2(1,4,5,6)
+       -1       objbend
+
+REMAINING 6 ENTRIES SKIPPED
+
+---- alpha  closest octilinear approximation
+
+alpha(1,2,prec)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       octicon1(1,2)
+       -7       octicon2a(1,2)
+       -3       octicon2b(2,1)
+       52       octicon3v(prec,1,2)
+       52       octicon3w(prec,1,2)
+      -52       octicon3x(prec,1,2)
+
+alpha(1,2,orig)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       octicon1(1,2)
+       -4       octicon2b(2,1)
+       52       octicon3a(orig,1,2)
+       52       octicon3b(orig,1,2)
+      -52       octicon3c(orig,1,2)
+
+alpha(1,2,succ)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       octicon1(1,2)
+       -1       octicon2a(1,2)
+       -5       octicon2b(2,1)
+       52       octicon3d(succ,1,2)
+       52       octicon3e(succ,1,2)
+      -52       octicon3f(succ,1,2)
+
+REMAINING 36 ENTRIES SKIPPED
+
+---- beta  
+
+beta(2,1)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       cvocon1(2)
+       -8       cvocon2c
+
+beta(2,3)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       cvocon1(2)
+       -8       cvocon2b
+
+beta(2,4)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       cvocon1(2)
+       -8       cvocon2a
+
+REMAINING 20 ENTRIES SKIPPED
+
+---- delta1  
+
+delta1(1,1,2,4)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        8       bendcon1(1,1,2,4)
+        8       bendcon2(1,1,2,4)
+
+delta1(1,2,4,5)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        8       bendcon1(1,2,4,5)
+        8       bendcon2(1,2,4,5)
+
+delta1(1,4,5,6)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        8       bendcon1(1,4,5,6)
+        8       bendcon2(1,4,5,6)
+
+REMAINING 6 ENTRIES SKIPPED
+
+---- delta2  
+
+delta2(1,1,2,4)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       -8       bendcon1(1,1,2,4)
+       -8       bendcon2(1,1,2,4)
+
+delta2(1,2,4,5)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       -8       bendcon1(1,2,4,5)
+       -8       bendcon2(1,2,4,5)
+
+delta2(1,4,5,6)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       -8       bendcon1(1,4,5,6)
+       -8       bendcon2(1,4,5,6)
+
+REMAINING 6 ENTRIES SKIPPED
+
+---- rpos  relative position penalty
+
+rpos(1,2)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       52       rposcon1(1,2)
+      -52       rposcon2(1,2)
+       -1       objrpos
+
+rpos(2,3)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       52       rposcon1(2,3)
+      -52       rposcon2(2,3)
+       -1       objrpos
+
+rpos(2,4)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+       52       rposcon1(2,4)
+      -52       rposcon2(2,4)
+       -1       objrpos
+
+REMAINING 10 ENTRIES SKIPPED
+
+---- gamma  binary variable selecting compass orientation
+
+gamma(1,2,3,10,N)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       edgecon(1,2,3,10)
+       52       edgeconN1(1,2,3,10)
+       52       edgeconN2(1,2,3,10)
+       52       edgeconN3(1,2,3,10)
+       52       edgeconN4(1,2,3,10)
+
+gamma(1,2,3,10,S)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       edgecon(1,2,3,10)
+       52       edgeconS1(1,2,3,10)
+       52       edgeconS2(1,2,3,10)
+       52       edgeconS3(1,2,3,10)
+       52       edgeconS4(1,2,3,10)
+
+gamma(1,2,3,10,E)
+                (.LO, .L, .UP, .M = 0, 0, 1, 0)
+        1       edgecon(1,2,3,10)
+       52       edgeconE1(1,2,3,10)
+       52       edgeconE2(1,2,3,10)
+       52       edgeconE3(1,2,3,10)
+       52       edgeconE4(1,2,3,10)
+
+REMAINING 61 ENTRIES SKIPPED
+
+---- weight_var  
+
+weight_var(1)
+                (.LO, .L, .UP, .M = -INF, 0.0001, +INF, 0)
+       (0)      obj
+
+weight_var(2)
+                (.LO, .L, .UP, .M = -INF, 0.9999, +INF, 0)
+       (0)      obj
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 5
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE automap Using MIP From line 516
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         100     SINGLE EQUATIONS          603
+BLOCKS OF VARIABLES          17     SINGLE VARIABLES          250
+NON ZERO ELEMENTS         1,781     NON LINEAR N-Z              4
+DERIVATIVE POOL              10     CONSTANT POOL              16
+CODE LENGTH                   9     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.009 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+
+
+EXECUTION TIME       =        0.011 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 6
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE automap Using MIP From line 516
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   automap             OBJECTIVE  Z
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  516
+
+**** SOLVER STATUS     4 Terminated By Solver      
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                0.0009
+
+ RESOURCE USAGE, LIMIT          1.356      1000.000
+ ITERATION COUNT, LIMIT       111    2000000000
+
+GUSS             24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+Reading parameter(s) from scenario dictionary
+>>  UpdateType 1
+>>  Optfile 1
+--- Scenario Variable with potential updates identified: weight
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.27sec (det. 21.77 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.62 ticks)
+Proven optimal solution.
+
+MIP Solution:            0.000900    (102 iterations, 0 nodes)
+Final Solve:             0.000900    (9 iterations)
+
+Best possible:           0.000900
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+--- Solution statistics for scenario Base Case
+---   Solver Status    1 Normal Completion         
+---   Model Status     1 Optimal                   
+---   Objective Value  0.0009
+---   Resource Usage   530
+---   Total Time (ms)  530
+--- Scenario R0:        Records read:    2
+--- Solution statistics for scenario R0
+---   Solver Status    4 Terminated By Solver      
+---   Model Status     8 Integer Solution          
+---   Objective Value  0.0009
+---   Resource Usage   77
+---   Total Time (ms)  77
+--- Scenario R1:        Records read:    2
+--- Solution statistics for scenario R1
+---   Solver Status    4 Terminated By Solver      
+---   Model Status     8 Integer Solution          
+---   Objective Value  2.25
+---   Resource Usage   109
+---   Total Time (ms)  109
+--- Scenario R2:        Records read:    2
+--- Solution statistics for scenario R2
+---   Solver Status    4 Terminated By Solver      
+---   Model Status     8 Integer Solution          
+---   Objective Value  3.5
+---   Resource Usage   122
+---   Total Time (ms)  122
+--- Scenario R3:        Records read:    2
+--- Solution statistics for scenario R3
+---   Solver Status    4 Terminated By Solver      
+---   Model Status     8 Integer Solution          
+---   Objective Value  3.25
+---   Resource Usage   216
+---   Total Time (ms)  216
+--- Scenario R4:        Records read:    2
+--- Solution statistics for scenario R4
+---   Solver Status    4 Terminated By Solver      
+---   Model Status     8 Integer Solution          
+---   Objective Value  3.0001
+---   Resource Usage   305
+---   Total Time (ms)  305
+
+---- EQU xlim  
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1      -INF       .       52.000      .         
+2      -INF      2.000    52.000      .         
+3      -INF      2.000    52.000      .         
+4      -INF      4.000    52.000      .         
+5      -INF      4.000    52.000      .         
+6      -INF      6.000    52.000      .         
+7      -INF      8.000    52.000      .         
+8      -INF      6.000    52.000      .         
+9      -INF      8.000    52.000      .         
+10     -INF       .       52.000      .         
+11     -INF       .       52.000      .         
+
+---- EQU ylim  
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1      -INF       .       52.000      .         
+2      -INF       .       52.000      .         
+3      -INF      4.000    52.000      .         
+4      -INF      2.000    52.000      .         
+5      -INF      4.000    52.000      .         
+6      -INF      6.000    52.000      .         
+7      -INF      4.000    52.000      .         
+8      -INF       .       52.000      .         
+9      -INF       .       52.000      .         
+10     -INF      4.000    52.000      .         
+11     -INF      6.000    52.000      .         
+
+---- EQU defz1  
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1       .         .         .         EPS       
+2       .         .         .         EPS       
+3       .         .         .         EPS       
+4       .         .         .         EPS       
+5       .         .         .         EPS       
+6       .         .         .         EPS       
+7       .         .         .         EPS       
+8       .         .         .         EPS       
+9       .         .         .         EPS       
+10      .         .         .         EPS       
+11      .         .         .         EPS       
+
+---- EQU defz2  
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1       .         .         .         EPS       
+2       .         .         .         EPS       
+3       .         .         .         EPS       
+4       .         .         .         EPS       
+5       .         .         .         EPS       
+6       .         .         .         EPS       
+7       .         .         .         EPS       
+8       .         .         .         EPS       
+9       .         .         .         EPS       
+10      .         .         .         EPS       
+11      .         .         .         EPS       
+
+---- EQU octicon1  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      1.000     1.000     1.000      .         
+2 .3      1.000     1.000     1.000      .         
+2 .4      1.000     1.000     1.000      .         
+3 .5      1.000     1.000     1.000      .         
+3 .10     1.000     1.000     1.000      .         
+4 .3      1.000     1.000     1.000      .         
+4 .5      1.000     1.000     1.000      .         
+5 .6      1.000     1.000     1.000      .         
+5 .7      1.000     1.000     1.000      .         
+8 .4      1.000     1.000     1.000      .         
+9 .7      1.000     1.000     1.000      .         
+9 .8      1.000     1.000     1.000      .         
+10.11     1.000     1.000     1.000      .         
+
+---- EQU octicon2a  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2       .         .         .    -1.000E-4      
+2 .3       .         .         .    1.0000E-4      
+2 .4       .         .         .         EPS       
+3 .5       .         .         .    -1.000E-4      
+3 .10      .         .         .    2.0000E-4      
+4 .3       .         .         .    -1.000E-4      
+4 .5       .         .         .    2.0000E-4      
+5 .6       .         .         .    -1.000E-4      
+5 .7       .         .         .         .         
+8 .4       .         .         .    -1.000E-4      
+9 .7       .         .         .         EPS       
+9 .8       .         .         .    1.0000E-4      
+10.11      .         .         .    -1.000E-4      
+
+---- EQU octicon2b  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+2 .1       .         .         .         EPS       
+3 .2       .         .         .         EPS       
+3 .4       .         .         .         EPS       
+4 .2       .         .         .         EPS       
+4 .8       .         .         .         EPS       
+5 .3       .         .         .         EPS       
+5 .4       .         .         .         EPS       
+6 .5       .         .         .         EPS       
+7 .5       .         .         .         EPS       
+7 .9       .         .         .         EPS       
+8 .9       .         .         .         .         
+10.3       .         .         .         .         
+11.10      .         .         .         EPS       
+
+---- EQU octicon3a  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2.4     -INF     -2.000    52.000      .         
+prec.5.6     -INF     -2.000    52.000      .         
+orig.1.2     -INF     52.000    52.000      .         
+orig.3.5     -INF     52.000    52.000      EPS       
+orig.5.7     -INF     52.000    52.000      .         
+
+---- EQU octicon3b  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2.4     -INF      2.000    52.000      .         
+prec.5.6     -INF      2.000    52.000      .         
+orig.1.2     -INF     52.000    52.000      EPS       
+orig.3.5     -INF     52.000    52.000      .         
+orig.5.7     -INF     52.000    52.000      EPS       
+
+---- EQU octicon3c  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2.4   -50.000     2.000     +INF       .         
+prec.5.6   -50.000     2.000     +INF       .         
+orig.1.2   -50.000   -50.000     +INF       EPS       
+orig.3.5   -50.000   -50.000     +INF       .         
+orig.5.7   -50.000   -48.000     +INF       .         
+
+---- EQU octicon3d  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2 .3      -INF      2.000    52.000      .         
+prec.4 .5      -INF      1.000    52.000      .         
+prec.9 .7      -INF      2.000    52.000      .         
+prec.10.11     -INF      1.000    52.000      .         
+orig.2 .4      -INF     52.000    52.000      .         
+orig.5 .6      -INF     52.000    52.000      .         
+succ.1 .2      -INF     -1.000    52.000      .         
+succ.3 .5      -INF     -1.000    52.000      .         
+succ.5 .7      -INF     -2.000    52.000      .         
+
+---- EQU octicon3e  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2 .3      -INF     -2.000    52.000      .         
+prec.4 .5      -INF     -1.000    52.000      .         
+prec.9 .7      -INF     -2.000    52.000      .         
+prec.10.11     -INF     -1.000    52.000      .         
+orig.2 .4      -INF     52.000    52.000      EPS       
+orig.5 .6      -INF     52.000    52.000      EPS       
+succ.1 .2      -INF      1.000    52.000      .         
+succ.3 .5      -INF      1.000    52.000      .         
+succ.5 .7      -INF      2.000    52.000      .         
+
+---- EQU octicon3f  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.2 .3    -50.000     2.000     +INF       .         
+prec.4 .5    -50.000     1.000     +INF       .         
+prec.9 .7    -50.000     2.000     +INF       .         
+prec.10.11   -50.000     1.000     +INF       .         
+orig.2 .4    -50.000   -50.000     +INF       .         
+orig.5 .6    -50.000   -50.000     +INF       EPS       
+succ.1 .2    -50.000     1.000     +INF       .         
+succ.3 .5    -50.000     1.000     +INF       .         
+succ.5 .7    -50.000     2.000     +INF       .         
+
+---- EQU octicon3g  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.4 .3      -INF      2.000    52.000      .         
+prec.8 .4      -INF      2.000    52.000      .         
+orig.2 .3      -INF     52.000    52.000      .         
+orig.4 .5      -INF     52.000    52.000      .         
+orig.9 .7      -INF     52.000    52.000      .         
+orig.10.11     -INF     52.000    52.000      EPS       
+succ.2 .4      -INF     -2.000    52.000      .         
+succ.5 .6      -INF     -2.000    52.000      .         
+
+---- EQU octicon3h  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.4 .3      -INF     -2.000    52.000      .         
+prec.8 .4      -INF     -2.000    52.000      .         
+orig.2 .3      -INF     52.000    52.000      EPS       
+orig.4 .5      -INF     52.000    52.000      EPS       
+orig.9 .7      -INF     52.000    52.000      EPS       
+orig.10.11     -INF     52.000    52.000      .         
+succ.2 .4      -INF      2.000    52.000      .         
+succ.5 .6      -INF      2.000    52.000      .         
+
+---- EQU octicon3i  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.4 .3    -50.000     2.000     +INF       .         
+prec.8 .4    -50.000     2.000     +INF       .         
+orig.2 .3    -50.000   -48.000     +INF       .         
+orig.4 .5    -50.000   -50.000     +INF       .         
+orig.9 .7    -50.000   -48.000     +INF       .         
+orig.10.11   -50.000   -50.000     +INF       EPS       
+succ.2 .4    -50.000     2.000     +INF       .         
+succ.5 .6    -50.000     2.000     +INF       .         
+
+---- EQU octicon3j  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.3 .10     -INF      1.000    52.000      .         
+prec.9 .8      -INF      1.000    52.000      .         
+orig.4 .3      -INF     52.000    52.000      EPS       
+orig.8 .4      -INF     52.000    52.000      .         
+succ.2 .3      -INF     -2.000    52.000      .         
+succ.4 .5      -INF     -1.000    52.000      .         
+succ.9 .7      -INF     -2.000    52.000      .         
+succ.10.11     -INF     -1.000    52.000      .         
+
+---- EQU octicon3k  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.3 .10     -INF     -1.000    52.000      .         
+prec.9 .8      -INF     -1.000    52.000      .         
+orig.4 .3      -INF     52.000    52.000      .         
+orig.8 .4      -INF     52.000    52.000      EPS       
+succ.2 .3      -INF      2.000    52.000      .         
+succ.4 .5      -INF      1.000    52.000      .         
+succ.9 .7      -INF      2.000    52.000      .         
+succ.10.11     -INF      1.000    52.000      .         
+
+---- EQU octicon3l  
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+prec.3 .10   -50.000     1.000     +INF       .         
+prec.9 .8    -50.000     1.000     +INF       .         
+orig.4 .3    -50.000   -50.000     +INF       .         
+orig.8 .4    -50.000   -50.000     +INF       .         
+succ.2 .3    -50.000     2.000     +INF       .         
+succ.4 .5    -50.000     1.000     +INF       .         
+succ.9 .7    -50.000     2.000     +INF       .         
+succ.10.11   -50.000     1.000     +INF       .         
+
+---- EQU octicon3m  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+orig.3.10     -INF     52.000    52.000      EPS       
+orig.9.8      -INF     52.000    52.000      .         
+succ.4.3      -INF     -2.000    52.000      .         
+succ.8.4      -INF     -2.000    52.000      .         
+
+---- EQU octicon3n  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+orig.3.10     -INF     52.000    52.000      .         
+orig.9.8      -INF     52.000    52.000      EPS       
+succ.4.3      -INF      2.000    52.000      .         
+succ.8.4      -INF      2.000    52.000      .         
+
+---- EQU octicon3o  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+orig.3.10   -50.000   -50.000     +INF       .         
+orig.9.8    -50.000   -50.000     +INF       .         
+succ.4.3    -50.000     2.000     +INF       .         
+succ.8.4    -50.000     2.000     +INF       .         
+
+---- EQU octicon3p  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+succ.3.10     -INF      1.000    52.000      .         
+succ.9.8      -INF      1.000    52.000      .         
+
+---- EQU octicon3q  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+succ.3.10     -INF     -1.000    52.000      .         
+succ.9.8      -INF     -1.000    52.000      .         
+
+---- EQU octicon3r  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+succ.3.10   -50.000     1.000     +INF       .         
+succ.9.8    -50.000     1.000     +INF       .         
+
+---- EQU octicon3s  
+
+                NONE
+
+
+---- EQU octicon3t  
+
+                NONE
+
+
+---- EQU octicon3u  
+
+                NONE
+
+
+---- EQU octicon3v  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.1.2     -INF     -1.000    52.000      .         
+prec.3.5     -INF     -1.000    52.000      .         
+prec.5.7     -INF     -2.000    52.000      .         
+
+---- EQU octicon3w  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.1.2     -INF      1.000    52.000      .         
+prec.3.5     -INF      1.000    52.000      .         
+prec.5.7     -INF      2.000    52.000      .         
+
+---- EQU octicon3x  
+
+            LOWER     LEVEL     UPPER    MARGINAL
+
+prec.1.2   -50.000     1.000     +INF       .         
+prec.3.5   -50.000     1.000     +INF       .         
+prec.5.7   -50.000     2.000     +INF       .         
+
+---- EQU cvocon1  
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+2      1.000     1.000     1.000      .         
+3      1.000     1.000     1.000      .         
+4      1.000     1.000     1.000      .         
+5      1.000     1.000     1.000      .         
+7      1.000     1.000     1.000      .         
+8      1.000     1.000     1.000      .         
+9      1.000     1.000     1.000      .         
+10     1.000     1.000     1.000      .         
+
+                       LOWER     LEVEL     UPPER    MARGINAL
+
+---- EQU cvocon2a       -INF     -1.000    -1.000      .         
+---- EQU cvocon2b       -INF     -2.000    -1.000      .         
+---- EQU cvocon2c       -INF     -5.000    -1.000      .         
+---- EQU cvocon3a       -INF     -4.000    -1.000      .         
+---- EQU cvocon3b       -INF     -2.000    -1.000      .         
+---- EQU cvocon3c       -INF     -1.000    -1.000      .         
+---- EQU cvocon3d       -INF     -1.000    -1.000      .         
+---- EQU cvocon4a       -INF     -1.000    -1.000      .         
+---- EQU cvocon4b       -INF     -2.000    -1.000      .         
+---- EQU cvocon4c       -INF     -2.000    -1.000      .         
+---- EQU cvocon4d       -INF     -3.000    -1.000      .         
+---- EQU cvocon5a       -INF     -1.000    -1.000      .         
+---- EQU cvocon5b       -INF     -3.000    -1.000      .         
+---- EQU cvocon5c       -INF     -2.000    -1.000      .         
+---- EQU cvocon5d       -INF     -2.000    -1.000      .         
+---- EQU cvocon7a       -INF     -2.000    -1.000      .         
+---- EQU cvocon7b       -INF     -6.000    -1.000      .         
+---- EQU cvocon8a       -INF     -3.000    -1.000      .         
+---- EQU cvocon8b       -INF     -5.000    -1.000      .         
+---- EQU cvocon9a       -INF     -2.000    -1.000      .         
+---- EQU cvocon9b       -INF     -6.000    -1.000      .         
+---- EQU cvocon10a      -INF     -2.000    -1.000      .         
+---- EQU cvocon10b      -INF     -6.000    -1.000      .         
+
+---- EQU edgecon  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     1.000     1.000     +INF       .         
+1.2.5 .6      1.000     1.000     +INF       .         
+1.2.10.11     1.000     1.000     +INF       .         
+4.5.9 .7      1.000     1.000     +INF       .         
+4.5.9 .8      1.000     1.000     +INF       .         
+8.4.5 .7      1.000     1.000     +INF       .         
+8.4.9 .7      1.000     1.000     +INF       .         
+9.8.5 .7      1.000     1.000     +INF       .         
+
+---- EQU edgeconE1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF      4.000    51.000      .         
+1.2.10.11     -INF       .       51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      4.000    51.000      .         
+8.4.5 .7      -INF     -2.000    51.000      .         
+8.4.9 .7      -INF      2.000    51.000      .         
+9.8.5 .7      -INF     -4.000    51.000      .         
+
+---- EQU edgeconE2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF       .       51.000      .         
+1.2.5 .6      -INF      2.000    51.000      .         
+1.2.10.11     -INF     -2.000    51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      4.000    51.000      .         
+8.4.5 .7      -INF       .       51.000      .         
+8.4.9 .7      -INF      4.000    51.000      .         
+9.8.5 .7      -INF     -2.000    51.000      .         
+
+---- EQU edgeconE3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF       .       51.000      .         
+1.2.5 .6      -INF      6.000    51.000      .         
+1.2.10.11     -INF       .       51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      2.000    51.000      .         
+8.4.5 .7      -INF      2.000    51.000      .         
+8.4.9 .7      -INF      2.000    51.000      .         
+9.8.5 .7      -INF       .       51.000      .         
+
+---- EQU edgeconE4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF      4.000    51.000      .         
+1.2.10.11     -INF     -2.000    51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      2.000    51.000      .         
+8.4.5 .7      -INF      4.000    51.000      .         
+8.4.9 .7      -INF      4.000    51.000      .         
+9.8.5 .7      -INF      2.000    51.000      .         
+
+---- EQU edgeconNE1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      3.000    51.000      .         
+1.2.5 .6      -INF      4.000    51.000      .         
+1.2.10.11     -INF      2.000    51.000      .         
+4.5.9 .7      -INF      1.000    51.000      .         
+4.5.9 .8      -INF      1.000    51.000      .         
+8.4.5 .7      -INF      1.000    51.000      .         
+8.4.9 .7      -INF      1.000    51.000      .         
+9.8.5 .7      -INF       .       51.000      .         
+
+---- EQU edgeconNE2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF      3.000    51.000      .         
+1.2.10.11     -INF      1.000    51.000      .         
+4.5.9 .7      -INF       .       51.000      .         
+4.5.9 .8      -INF       .       51.000      .         
+8.4.5 .7      -INF      1.000    51.000      .         
+8.4.9 .7      -INF      1.000    51.000      .         
+9.8.5 .7      -INF      1.000    51.000      .         
+
+---- EQU edgeconNE3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF      6.000    51.000      .         
+1.2.10.11     -INF      3.000    51.000      .         
+4.5.9 .7      -INF      3.000    51.000      .         
+4.5.9 .8      -INF       .       51.000      .         
+8.4.5 .7      -INF      3.000    51.000      .         
+8.4.9 .7      -INF      3.000    51.000      .         
+9.8.5 .7      -INF      2.000    51.000      .         
+
+---- EQU edgeconNE4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      1.000    51.000      .         
+1.2.5 .6      -INF      5.000    51.000      .         
+1.2.10.11     -INF      2.000    51.000      .         
+4.5.9 .7      -INF      2.000    51.000      .         
+4.5.9 .8      -INF     -1.000    51.000      .         
+8.4.5 .7      -INF      3.000    51.000      .         
+8.4.9 .7      -INF      3.000    51.000      .         
+9.8.5 .7      -INF      3.000    51.000      .         
+
+---- EQU edgeconN1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      4.000    51.000      .         
+1.2.5 .6      -INF      4.000    51.000      .         
+1.2.10.11     -INF      4.000    51.000      .         
+4.5.9 .7      -INF     -2.000    51.000      .         
+4.5.9 .8      -INF     50.000    51.000      .         
+8.4.5 .7      -INF      4.000    51.000      .         
+8.4.9 .7      -INF       .       51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconN2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      4.000    51.000      .         
+1.2.5 .6      -INF      4.000    51.000      .         
+1.2.10.11     -INF      4.000    51.000      .         
+4.5.9 .7      -INF     -4.000    51.000      .         
+4.5.9 .8      -INF     48.000    51.000      .         
+8.4.5 .7      -INF      2.000    51.000      .         
+8.4.9 .7      -INF     -2.000    51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconN3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      4.000    51.000      .         
+1.2.5 .6      -INF      6.000    51.000      .         
+1.2.10.11     -INF      6.000    51.000      .         
+4.5.9 .7      -INF      2.000    51.000      .         
+4.5.9 .8      -INF     50.000    51.000      .         
+8.4.5 .7      -INF      4.000    51.000      .         
+8.4.9 .7      -INF      4.000    51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconN4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      4.000    51.000      .         
+1.2.5 .6      -INF      6.000    51.000      .         
+1.2.10.11     -INF      6.000    51.000      .         
+4.5.9 .7      -INF       .       51.000      .         
+4.5.9 .8      -INF     48.000    51.000      .         
+8.4.5 .7      -INF      2.000    51.000      .         
+8.4.9 .7      -INF      2.000    51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconNW1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      1.000    51.000      .         
+1.2.5 .6      -INF       .       51.000      .         
+1.2.10.11     -INF      2.000    51.000      .         
+4.5.9 .7      -INF     -3.000    51.000      .         
+4.5.9 .8      -INF     -3.000    51.000      .         
+8.4.5 .7      -INF      3.000    51.000      .         
+8.4.9 .7      -INF     -1.000    51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconNW2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF      1.000    51.000      .         
+1.2.10.11     -INF      3.000    51.000      .         
+4.5.9 .7      -INF     -4.000    51.000      .         
+4.5.9 .8      -INF     -4.000    51.000      .         
+8.4.5 .7      -INF      1.000    51.000      .         
+8.4.9 .7      -INF     -3.000    51.000      .         
+9.8.5 .7      -INF      3.000    51.000      .         
+
+---- EQU edgeconNW3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF       .       51.000      .         
+1.2.10.11     -INF      3.000    51.000      .         
+4.5.9 .7      -INF     -1.000    51.000      .         
+4.5.9 .8      -INF     -2.000    51.000      .         
+8.4.5 .7      -INF      1.000    51.000      .         
+8.4.9 .7      -INF      1.000    51.000      .         
+9.8.5 .7      -INF      2.000    51.000      .         
+
+---- EQU edgeconNW4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      3.000    51.000      .         
+1.2.5 .6      -INF      1.000    51.000      .         
+1.2.10.11     -INF      4.000    51.000      .         
+4.5.9 .7      -INF     -2.000    51.000      .         
+4.5.9 .8      -INF     -3.000    51.000      .         
+8.4.5 .7      -INF     -1.000    51.000      .         
+8.4.9 .7      -INF     -1.000    51.000      .         
+9.8.5 .7      -INF      1.000    51.000      .         
+
+---- EQU edgeconW1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF     -4.000    51.000      .         
+1.2.10.11     -INF       .       51.000      .         
+4.5.9 .7      -INF     48.000    51.000      .         
+4.5.9 .8      -INF     -4.000    51.000      .         
+8.4.5 .7      -INF      2.000    51.000      .         
+8.4.9 .7      -INF     -2.000    51.000      .         
+9.8.5 .7      -INF      4.000    51.000      .         
+
+---- EQU edgeconW2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF       .       51.000      .         
+1.2.5 .6      -INF     -2.000    51.000      .         
+1.2.10.11     -INF      2.000    51.000      .         
+4.5.9 .7      -INF     48.000    51.000      .         
+4.5.9 .8      -INF     -4.000    51.000      .         
+8.4.5 .7      -INF       .       51.000      .         
+8.4.9 .7      -INF     -4.000    51.000      .         
+9.8.5 .7      -INF      2.000    51.000      .         
+
+---- EQU edgeconW3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF       .       51.000      .         
+1.2.5 .6      -INF     -6.000    51.000      .         
+1.2.10.11     -INF       .       51.000      .         
+4.5.9 .7      -INF     48.000    51.000      .         
+4.5.9 .8      -INF     -2.000    51.000      .         
+8.4.5 .7      -INF     -2.000    51.000      .         
+8.4.9 .7      -INF     -2.000    51.000      .         
+9.8.5 .7      -INF       .       51.000      .         
+
+---- EQU edgeconW4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF      2.000    51.000      .         
+1.2.5 .6      -INF     -4.000    51.000      .         
+1.2.10.11     -INF      2.000    51.000      .         
+4.5.9 .7      -INF     48.000    51.000      .         
+4.5.9 .8      -INF     -2.000    51.000      .         
+8.4.5 .7      -INF     -4.000    51.000      .         
+8.4.9 .7      -INF     -4.000    51.000      .         
+9.8.5 .7      -INF     -2.000    51.000      .         
+
+---- EQU edgeconSW1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -3.000    51.000      .         
+1.2.5 .6      -INF     48.000    51.000      .         
+1.2.10.11     -INF     50.000    51.000      .         
+4.5.9 .7      -INF     -1.000    51.000      .         
+4.5.9 .8      -INF     -1.000    51.000      .         
+8.4.5 .7      -INF     -1.000    51.000      .         
+8.4.9 .7      -INF     51.000    51.000      .         
+9.8.5 .7      -INF       .       51.000      .         
+
+---- EQU edgeconSW2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF     49.000    51.000      .         
+1.2.10.11     -INF     51.000    51.000      EPS       
+4.5.9 .7      -INF       .       51.000      .         
+4.5.9 .8      -INF       .       51.000      .         
+8.4.5 .7      -INF     -1.000    51.000      .         
+8.4.9 .7      -INF     51.000    51.000      EPS       
+9.8.5 .7      -INF     -1.000    51.000      .         
+
+---- EQU edgeconSW3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF     46.000    51.000      .         
+1.2.10.11     -INF     49.000    51.000      .         
+4.5.9 .7      -INF     -3.000    51.000      .         
+4.5.9 .8      -INF       .       51.000      .         
+8.4.5 .7      -INF     -3.000    51.000      .         
+8.4.9 .7      -INF     49.000    51.000      .         
+9.8.5 .7      -INF     -2.000    51.000      .         
+
+---- EQU edgeconSW4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -1.000    51.000      .         
+1.2.5 .6      -INF     47.000    51.000      .         
+1.2.10.11     -INF     50.000    51.000      .         
+4.5.9 .7      -INF     -2.000    51.000      .         
+4.5.9 .8      -INF      1.000    51.000      .         
+8.4.5 .7      -INF     -3.000    51.000      .         
+8.4.9 .7      -INF     49.000    51.000      .         
+9.8.5 .7      -INF     -3.000    51.000      .         
+
+---- EQU edgeconS1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     48.000    51.000      .         
+1.2.5 .6      -INF     -4.000    51.000      .         
+1.2.10.11     -INF     -4.000    51.000      .         
+4.5.9 .7      -INF      2.000    51.000      .         
+4.5.9 .8      -INF      2.000    51.000      .         
+8.4.5 .7      -INF     48.000    51.000      .         
+8.4.9 .7      -INF       .       51.000      .         
+9.8.5 .7      -INF     48.000    51.000      .         
+
+---- EQU edgeconS2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     48.000    51.000      .         
+1.2.5 .6      -INF     -4.000    51.000      .         
+1.2.10.11     -INF     -4.000    51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      4.000    51.000      .         
+8.4.5 .7      -INF     50.000    51.000      .         
+8.4.9 .7      -INF      2.000    51.000      .         
+9.8.5 .7      -INF     48.000    51.000      .         
+
+---- EQU edgeconS3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     48.000    51.000      .         
+1.2.5 .6      -INF     -6.000    51.000      .         
+1.2.10.11     -INF     -6.000    51.000      .         
+4.5.9 .7      -INF     -2.000    51.000      .         
+4.5.9 .8      -INF      2.000    51.000      .         
+8.4.5 .7      -INF     48.000    51.000      .         
+8.4.9 .7      -INF     -4.000    51.000      .         
+9.8.5 .7      -INF     48.000    51.000      .         
+
+---- EQU edgeconS4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     48.000    51.000      .         
+1.2.5 .6      -INF     -6.000    51.000      .         
+1.2.10.11     -INF     -6.000    51.000      .         
+4.5.9 .7      -INF       .       51.000      .         
+4.5.9 .8      -INF      4.000    51.000      .         
+8.4.5 .7      -INF     50.000    51.000      .         
+8.4.9 .7      -INF     -2.000    51.000      .         
+9.8.5 .7      -INF     48.000    51.000      .         
+
+---- EQU edgeconSE1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -1.000    51.000      .         
+1.2.5 .6      -INF       .       51.000      .         
+1.2.10.11     -INF     -2.000    51.000      .         
+4.5.9 .7      -INF      3.000    51.000      .         
+4.5.9 .8      -INF      3.000    51.000      .         
+8.4.5 .7      -INF     -3.000    51.000      .         
+8.4.9 .7      -INF      1.000    51.000      .         
+9.8.5 .7      -INF     -4.000    51.000      .         
+
+---- EQU edgeconSE2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF     -1.000    51.000      .         
+1.2.10.11     -INF     -3.000    51.000      .         
+4.5.9 .7      -INF      4.000    51.000      .         
+4.5.9 .8      -INF      4.000    51.000      .         
+8.4.5 .7      -INF     -1.000    51.000      .         
+8.4.9 .7      -INF      3.000    51.000      .         
+9.8.5 .7      -INF     -3.000    51.000      .         
+
+---- EQU edgeconSE3  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -2.000    51.000      .         
+1.2.5 .6      -INF       .       51.000      .         
+1.2.10.11     -INF     -3.000    51.000      .         
+4.5.9 .7      -INF      1.000    51.000      .         
+4.5.9 .8      -INF      2.000    51.000      .         
+8.4.5 .7      -INF     -1.000    51.000      .         
+8.4.9 .7      -INF     -1.000    51.000      .         
+9.8.5 .7      -INF     -2.000    51.000      .         
+
+---- EQU edgeconSE4  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10     -INF     -3.000    51.000      .         
+1.2.5 .6      -INF     -1.000    51.000      .         
+1.2.10.11     -INF     -4.000    51.000      .         
+4.5.9 .7      -INF      2.000    51.000      .         
+4.5.9 .8      -INF      3.000    51.000      .         
+8.4.5 .7      -INF      1.000    51.000      .         
+8.4.9 .7      -INF      1.000    51.000      .         
+9.8.5 .7      -INF     -1.000    51.000      .         
+
+---- EQU telcon1  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      -INF     -2.000     4.000      .         
+2 .3      -INF       .        4.000      .         
+2 .4      -INF     -2.000     4.000      .         
+3 .5      -INF     -2.000     4.000      .         
+3 .10     -INF      2.000     4.000      .         
+4 .3      -INF      2.000     4.000      .         
+4 .5      -INF       .        4.000      .         
+5 .6      -INF     -2.000     4.000      .         
+5 .7      -INF     -4.000     4.000      .         
+8 .4      -INF      2.000     4.000      .         
+9 .7      -INF       .        4.000      .         
+9 .8      -INF      2.000     4.000      .         
+10.11     -INF       .        4.000      .         
+
+---- EQU telcon2  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      -INF      2.000     4.000      .         
+2 .3      -INF       .        4.000      .         
+2 .4      -INF      2.000     4.000      .         
+3 .5      -INF      2.000     4.000      .         
+3 .10     -INF     -2.000     4.000      .         
+4 .3      -INF     -2.000     4.000      .         
+4 .5      -INF       .        4.000      .         
+5 .6      -INF      2.000     4.000      .         
+5 .7      -INF      4.000     4.000      .         
+8 .4      -INF     -2.000     4.000      .         
+9 .7      -INF       .        4.000      .         
+9 .8      -INF     -2.000     4.000      .         
+10.11     -INF       .        4.000      .         
+
+---- EQU telcon3  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      -INF       .        4.000      .         
+2 .3      -INF     -4.000     4.000      .         
+2 .4      -INF     -2.000     4.000      .         
+3 .5      -INF       .        4.000      .         
+3 .10     -INF       .        4.000      .         
+4 .3      -INF     -2.000     4.000      .         
+4 .5      -INF     -2.000     4.000      .         
+5 .6      -INF     -2.000     4.000      .         
+5 .7      -INF       .        4.000      .         
+8 .4      -INF     -2.000     4.000      .         
+9 .7      -INF     -4.000     4.000      .         
+9 .8      -INF       .        4.000      .         
+10.11     -INF     -2.000     4.000      .         
+
+---- EQU telcon4  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      -INF       .        4.000      .         
+2 .3      -INF      4.000     4.000      .         
+2 .4      -INF      2.000     4.000      .         
+3 .5      -INF       .        4.000      .         
+3 .10     -INF       .        4.000      .         
+4 .3      -INF      2.000     4.000      .         
+4 .5      -INF      2.000     4.000      .         
+5 .6      -INF      2.000     4.000      .         
+5 .7      -INF       .        4.000      .         
+8 .4      -INF      2.000     4.000      .         
+9 .7      -INF      4.000     4.000      .         
+9 .8      -INF       .        4.000      .         
+10.11     -INF      2.000     4.000      .         
+
+---- EQU rposcon1  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2       .         .        +INF       .         
+2 .3     -2.000    -2.000     +INF       .         
+2 .4     -1.000    -1.000     +INF       .         
+3 .5       .         .        +INF       .         
+3 .10    -4.000    -4.000     +INF       .         
+4 .3     -3.000    -3.000     +INF       .         
+4 .5     -2.000    -2.000     +INF       .         
+5 .6     -1.000    -1.000     +INF       .         
+5 .7       .         .        +INF       .         
+8 .4     -3.000    -3.000     +INF       .         
+9 .7     -2.000    -2.000     +INF       .         
+9 .8     -4.000    -4.000     +INF       .         
+10.11    -2.000    -2.000     +INF       .         
+
+---- EQU rposcon2  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2      -INF       .         .         .         
+2 .3      -INF     -2.000    -2.000      .         
+2 .4      -INF     -1.000    -1.000      .         
+3 .5      -INF       .         .         .         
+3 .10     -INF     -4.000    -4.000      .         
+4 .3      -INF     -3.000    -3.000      .         
+4 .5      -INF     -2.000    -2.000      .         
+5 .6      -INF     -1.000    -1.000      .         
+5 .7      -INF       .         .         .         
+8 .4      -INF     -3.000    -3.000      .         
+9 .7      -INF     -2.000    -2.000      .         
+9 .8      -INF     -4.000    -4.000      .         
+10.11     -INF     -2.000    -2.000      .         
+
+---- EQU ddi  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4       .         .         .    -1.000E-4      
+1.2.4 .5       .         .         .    -1.000E-4      
+1.4.5 .6       .         .         .    1.0000E-4      
+2.2.3 .5       .         .         .    1.0000E-4      
+2.3.5 .7       .         .         .         EPS       
+3.3.10.11      .         .         .    1.0000E-4      
+3.4.3 .10      .         .         .    -1.000E-4      
+3.8.4 .3       .         .         .         EPS       
+3.9.8 .4       .         .         .    1.0000E-4      
+
+---- EQU bendcon1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4       .        2.000     +INF       .         
+1.2.4 .5       .        2.000     +INF       .         
+1.4.5 .6       .         .        +INF  1.0000E-4      
+2.2.3 .5       .         .        +INF  1.0000E-4      
+2.3.5 .7       .         .        +INF       .         
+3.3.10.11      .         .        +INF  1.0000E-4      
+3.4.3 .10      .        2.000     +INF       .         
+3.8.4 .3       .         .        +INF       .         
+3.9.8 .4       .         .        +INF  1.0000E-4      
+
+---- EQU bendcon2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4      -INF       .         .    -1.000E-4      
+1.2.4 .5      -INF       .         .    -1.000E-4      
+1.4.5 .6      -INF     -2.000      .         .         
+2.2.3 .5      -INF     -4.000      .         .         
+2.3.5 .7      -INF       .         .         .         
+3.3.10.11     -INF     -4.000      .         .         
+3.4.3 .10     -INF       .         .    -1.000E-4      
+3.8.4 .3      -INF       .         .         .         
+3.9.8 .4      -INF     -2.000      .         .         
+
+                       LOWER     LEVEL     UPPER    MARGINAL
+
+---- EQU objbend         .         .         .    1.0000E-4      
+---- EQU objrpos         .         .         .         .         
+---- EQU obj             .         .         .        1.000      
+
+                       LOWER     LEVEL     UPPER    MARGINAL
+
+---- VAR Z              -INF  9.0000E-4     +INF       .         
+
+  Z  total cost
+
+---- VAR z2  -45 degree coordinate
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1      -INF       .        +INF       .         
+2      -INF      1.000     +INF       .         
+3      -INF     -1.000     +INF       .         
+4      -INF      1.000     +INF       .         
+5      -INF       .        +INF       .         
+6      -INF       .        +INF       .         
+7      -INF      2.000     +INF       .         
+8      -INF      3.000     +INF       .         
+9      -INF      4.000     +INF       .         
+10     -INF     -2.000     +INF       .         
+11     -INF     -3.000     +INF       .         
+
+---- VAR deltadir  sector difference btw adjacent egdes uv and uw as measure of angle btw
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4      -INF     -1.000     +INF       .         
+1.2.4 .5      -INF     -1.000     +INF       .         
+1.4.5 .6      -INF      1.000     +INF       .         
+2.2.3 .5      -INF      2.000     +INF       .         
+2.3.5 .7      -INF       .        +INF       .         
+3.3.10.11     -INF      2.000     +INF       .         
+3.4.3 .10     -INF     -1.000     +INF       .         
+3.8.4 .3      -INF       .        +INF       .         
+3.9.8 .4      -INF      1.000     +INF       .         
+
+---- VAR x  x coordinate
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1       .         .        +INF       EPS       
+2       .        2.000     +INF       .         
+3       .        2.000     +INF       .         
+4       .        4.000     +INF       .         
+5       .        4.000     +INF       .         
+6       .        6.000     +INF       .         
+7       .        8.000     +INF       .         
+8       .        6.000     +INF       .         
+9       .        8.000     +INF       .         
+10      .         .        +INF       EPS       
+11      .         .        +INF       .         
+
+---- VAR y  y coordinate
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1       .         .        +INF       .         
+2       .         .        +INF       EPS       
+3       .        4.000     +INF       .         
+4       .        2.000     +INF       .         
+5       .        4.000     +INF       .         
+6       .        6.000     +INF       .         
+7       .        4.000     +INF       .         
+8       .         .        +INF       EPS       
+9       .         .        +INF       .         
+10      .        4.000     +INF       .         
+11      .        6.000     +INF       .         
+
+---- VAR z1  +45 degree coordinate
+
+      LOWER     LEVEL     UPPER    MARGINAL
+
+1       .         .        +INF       .         
+2       .        1.000     +INF       .         
+3       .        3.000     +INF       .         
+4       .        3.000     +INF       .         
+5       .        4.000     +INF       .         
+6       .        6.000     +INF       .         
+7       .        6.000     +INF       .         
+8       .        3.000     +INF       .         
+9       .        4.000     +INF       .         
+10      .        2.000     +INF       .         
+11      .        3.000     +INF       .         
+
+---- VAR dir  octilinear direction of edge uv
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2       .         .        +INF       .         
+2 .1       .        4.000     +INF       .         
+2 .3       .        2.000     +INF       .         
+2 .4       .        1.000     +INF       .         
+3 .2       .        6.000     +INF       .         
+3 .4       .        7.000     +INF       .         
+3 .5       .         .        +INF       .         
+3 .10      .        4.000     +INF       .         
+4 .2       .        5.000     +INF       .         
+4 .3       .        3.000     +INF       .         
+4 .5       .        2.000     +INF       .         
+4 .8       .        7.000     +INF       .         
+5 .3       .        4.000     +INF       .         
+5 .4       .        6.000     +INF       .         
+5 .6       .        1.000     +INF       .         
+5 .7       .         .        +INF       EPS       
+6 .5       .        5.000     +INF       .         
+7 .5       .        4.000     +INF       .         
+7 .9       .        6.000     +INF       .         
+8 .4       .        3.000     +INF       .         
+8 .9       .         .        +INF       EPS       
+9 .7       .        2.000     +INF       .         
+9 .8       .        4.000     +INF       .         
+10.3       .         .        +INF       EPS       
+10.11      .        2.000     +INF       .         
+11.10      .        6.000     +INF       .         
+
+                       LOWER     LEVEL     UPPER    MARGINAL
+
+---- VAR cs1             .        9.000     +INF       .         
+---- VAR cs2             .         .        +INF      1.000      
+
+  cs1  total line bend cost
+  cs2  total relative position cost
+
+---- VAR bd  bend cost of angle between uv and vw
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4       .        1.000     +INF       .         
+1.2.4 .5       .        1.000     +INF       .         
+1.4.5 .6       .        1.000     +INF       .         
+2.2.3 .5       .        2.000     +INF       .         
+2.3.5 .7       .         .        +INF  1.0000E-4      
+3.3.10.11      .        2.000     +INF       .         
+3.4.3 .10      .        1.000     +INF       .         
+3.8.4 .3       .         .        +INF  1.0000E-4      
+3.9.8 .4       .        1.000     +INF       .         
+
+---- VAR alpha  closest octilinear approximation
+
+              LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2 .prec      .         .        1.000 -7.000E-4      
+1 .2 .orig      .        1.000     1.000      EPS       
+1 .2 .succ      .         .        1.000 -1.000E-4      
+2 .3 .prec      .         .        1.000 1.0000E-4      
+2 .3 .orig      .        1.000     1.000 2.0000E-4      
+2 .3 .succ      .         .        1.000 3.0000E-4      
+2 .4 .prec      .         .        1.000      EPS       
+2 .4 .orig      .        1.000     1.000      EPS       
+2 .4 .succ      .         .        1.000      EPS       
+3 .5 .prec      .         .        1.000 -7.000E-4      
+3 .5 .orig      .        1.000     1.000      EPS       
+3 .5 .succ      .         .        1.000 -1.000E-4      
+3 .10.prec      .         .        1.000 6.0000E-4      
+3 .10.orig      .        1.000     1.000 8.0000E-4      
+3 .10.succ      .         .        1.000     0.001      
+4 .3 .prec      .         .        1.000 -2.000E-4      
+4 .3 .orig      .        1.000     1.000 -3.000E-4      
+4 .3 .succ      .         .        1.000 -4.000E-4      
+4 .5 .prec      .         .        1.000 2.0000E-4      
+4 .5 .orig      .        1.000     1.000 4.0000E-4      
+4 .5 .succ      .         .        1.000 6.0000E-4      
+5 .6 .prec      .         .        1.000      EPS       
+5 .6 .orig      .        1.000     1.000 -1.000E-4      
+5 .6 .succ      .         .        1.000 -2.000E-4      
+5 .7 .prec      .         .        1.000      EPS       
+5 .7 .orig      .        1.000     1.000      EPS       
+5 .7 .succ      .         .        1.000      EPS       
+8 .4 .prec      .         .        1.000 -2.000E-4      
+8 .4 .orig      .        1.000     1.000 -3.000E-4      
+8 .4 .succ      .         .        1.000 -4.000E-4      
+9 .7 .prec      .         .        1.000      EPS       
+9 .7 .orig      .        1.000     1.000      EPS       
+9 .7 .succ      .         .        1.000      EPS       
+9 .8 .prec      .         .        1.000 3.0000E-4      
+9 .8 .orig      .        1.000     1.000 4.0000E-4      
+9 .8 .succ      .         .        1.000 5.0000E-4      
+10.11.prec      .         .        1.000 -1.000E-4      
+10.11.orig      .        1.000     1.000 -2.000E-4      
+10.11.succ      .         .        1.000 -3.000E-4      
+
+---- VAR beta  
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+2 .1       .        1.000     1.000      EPS       
+2 .3       .         .        1.000      EPS       
+2 .4       .         .        1.000      EPS       
+3 .2       .         .        1.000      EPS       
+3 .4       .        1.000     1.000      EPS       
+3 .5       .         .        1.000      EPS       
+3 .10      .         .        1.000      EPS       
+4 .2       .         .        1.000      EPS       
+4 .3       .         .        1.000      EPS       
+4 .5       .         .        1.000      EPS       
+4 .8       .        1.000     1.000      EPS       
+5 .3       .         .        1.000      EPS       
+5 .4       .        1.000     1.000      EPS       
+5 .6       .         .        1.000      EPS       
+5 .7       .         .        1.000      EPS       
+7 .5       .         .        1.000      EPS       
+7 .9       .        1.000     1.000      EPS       
+8 .4       .        1.000     1.000      EPS       
+8 .9       .         .        1.000      EPS       
+9 .7       .         .        1.000      EPS       
+9 .8       .        1.000     1.000      EPS       
+10.3       .         .        1.000      EPS       
+10.11      .        1.000     1.000      EPS       
+
+---- VAR delta1  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4       .        1.000     1.000 8.0000E-4      
+1.2.4 .5       .        1.000     1.000 8.0000E-4      
+1.4.5 .6       .         .        1.000 -8.000E-4      
+2.2.3 .5       .         .        1.000 -8.000E-4      
+2.3.5 .7       .        1.000     1.000      EPS       
+3.3.10.11      .        1.000     1.000 -8.000E-4      
+3.4.3 .10      .        1.000     1.000 8.0000E-4      
+3.8.4 .3       .        1.000     1.000      EPS       
+3.9.8 .4       .         .        1.000 -8.000E-4      
+
+---- VAR delta2  
+
+             LOWER     LEVEL     UPPER    MARGINAL
+
+1.1.2 .4       .        1.000     1.000 -8.000E-4      
+1.2.4 .5       .        1.000     1.000 -8.000E-4      
+1.4.5 .6       .         .        1.000 8.0000E-4      
+2.2.3 .5       .         .        1.000 8.0000E-4      
+2.3.5 .7       .        1.000     1.000      EPS       
+3.3.10.11      .        1.000     1.000 8.0000E-4      
+3.4.3 .10      .        1.000     1.000 -8.000E-4      
+3.8.4 .3       .        1.000     1.000      EPS       
+3.9.8 .4       .         .        1.000 8.0000E-4      
+
+---- VAR rpos  relative position penalty
+
+         LOWER     LEVEL     UPPER    MARGINAL
+
+1 .2       .         .        1.000      EPS       
+2 .3       .         .        1.000      EPS       
+2 .4       .         .        1.000      EPS       
+3 .5       .         .        1.000      EPS       
+3 .10      .         .        1.000      EPS       
+4 .3       .         .        1.000      EPS       
+4 .5       .         .        1.000      EPS       
+5 .6       .         .        1.000      EPS       
+5 .7       .         .        1.000      EPS       
+8 .4       .         .        1.000      EPS       
+9 .7       .         .        1.000      EPS       
+9 .8       .         .        1.000      EPS       
+10.11      .         .        1.000      EPS       
+
+---- VAR gamma  binary variable selecting compass orientation
+
+                LOWER     LEVEL     UPPER    MARGINAL
+
+1.2.3 .10.N       .         .        1.000      EPS       
+1.2.3 .10.S       .        1.000     1.000      EPS       
+1.2.3 .10.E       .         .        1.000      EPS       
+1.2.3 .10.W       .         .        1.000      EPS       
+1.2.3 .10.NE      .         .        1.000      EPS       
+1.2.3 .10.NW      .         .        1.000      EPS       
+1.2.3 .10.SE      .         .        1.000      EPS       
+1.2.3 .10.SW      .         .        1.000      EPS       
+1.2.5 .6 .N       .         .        1.000      EPS       
+1.2.5 .6 .S       .         .        1.000      EPS       
+1.2.5 .6 .E       .         .        1.000      EPS       
+1.2.5 .6 .W       .         .        1.000      EPS       
+1.2.5 .6 .NE      .         .        1.000      EPS       
+1.2.5 .6 .NW      .         .        1.000      EPS       
+1.2.5 .6 .SE      .         .        1.000      EPS       
+1.2.5 .6 .SW      .        1.000     1.000      EPS       
+1.2.10.11.N       .         .        1.000      EPS       
+1.2.10.11.S       .         .        1.000      EPS       
+1.2.10.11.E       .         .        1.000      EPS       
+1.2.10.11.W       .         .        1.000      EPS       
+1.2.10.11.NE      .         .        1.000      EPS       
+1.2.10.11.NW      .         .        1.000      EPS       
+1.2.10.11.SE      .         .        1.000      EPS       
+1.2.10.11.SW      .        1.000     1.000      EPS       
+4.5.9 .7 .N       .         .        1.000      EPS       
+4.5.9 .7 .S       .         .        1.000      EPS       
+4.5.9 .7 .E       .         .        1.000      EPS       
+4.5.9 .7 .W       .        1.000     1.000      EPS       
+4.5.9 .7 .NE      .         .        1.000      EPS       
+4.5.9 .7 .NW      .         .        1.000      EPS       
+4.5.9 .7 .SE      .         .        1.000      EPS       
+4.5.9 .7 .SW      .         .        1.000      EPS       
+4.5.9 .8 .N       .        1.000     1.000      EPS       
+4.5.9 .8 .S       .         .        1.000      EPS       
+4.5.9 .8 .E       .         .        1.000      EPS       
+4.5.9 .8 .W       .         .        1.000      EPS       
+4.5.9 .8 .NE      .         .        1.000      EPS       
+4.5.9 .8 .NW      .         .        1.000      EPS       
+4.5.9 .8 .SE      .         .        1.000      EPS       
+4.5.9 .8 .SW      .         .        1.000      EPS       
+8.4.5 .7 .N       .         .        1.000      EPS       
+8.4.5 .7 .S       .        1.000     1.000      EPS       
+8.4.5 .7 .E       .         .        1.000      EPS       
+8.4.5 .7 .W       .         .        1.000      EPS       
+8.4.5 .7 .NE      .         .        1.000      EPS       
+8.4.5 .7 .NW      .         .        1.000      EPS       
+8.4.5 .7 .SE      .         .        1.000      EPS       
+8.4.5 .7 .SW      .         .        1.000      EPS       
+8.4.9 .7 .N       .         .        1.000      EPS       
+8.4.9 .7 .S       .         .        1.000      EPS       
+8.4.9 .7 .E       .         .        1.000      EPS       
+8.4.9 .7 .W       .         .        1.000      EPS       
+8.4.9 .7 .NE      .         .        1.000      EPS       
+8.4.9 .7 .NW      .         .        1.000      EPS       
+8.4.9 .7 .SE      .         .        1.000      EPS       
+8.4.9 .7 .SW      .        1.000     1.000      EPS       
+9.8.5 .7 .N       .         .        1.000      EPS       
+9.8.5 .7 .S       .        1.000     1.000      EPS       
+9.8.5 .7 .E       .         .        1.000      EPS       
+9.8.5 .7 .W       .         .        1.000      EPS       
+9.8.5 .7 .NE      .         .        1.000      EPS       
+9.8.5 .7 .NW      .         .        1.000      EPS       
+9.8.5 .7 .SE      .         .        1.000      EPS       
+9.8.5 .7 .SW      .         .        1.000      EPS       
+
+---- VAR weight_var  
+
+     LOWER     LEVEL     UPPER    MARGINAL
+
+1     -INF  1.0000E-4     +INF       EPS       
+2     -INF      1.000     +INF       EPS       
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 09/10/14 03:38:05 Page 7
+"M E T R O  M A P  A U T O M A T I O N"
+E x e c u t i o n
+
+
+----    521 PARAMETER resultantcs1  collector for level of cs1
+
+R0 9
+R1 9
+R2 4
+R3 3
+R4 3
+
+
+----    521 PARAMETER resultantcs2  collector for level of cs2
+
+R2 3
+R3 4
+R4 4
+
+
+----    521 PARAMETER solutionstatus  Solution status report with initial vaues
+
+     modelstat   solvestat      objval
+
+R0       8.000       4.000 9.000000E-4
+R1       8.000       4.000       2.250
+R2       8.000       4.000       3.500
+R3       8.000       4.000       3.250
+R4       8.000       4.000       3.000
+
+
+
+EXECUTION TIME       =        0.008 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+
+
+USER: Civil Engineering                              G121219:1814AP-GEN
+      Johns Hopkins University                                  DC10084
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision1/Third-Example/Third-Ex
+           ample-OS-weighted-5.gms
+Output     /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision1/Third-Example/Third-Ex
+           ample-OS-weighted-5.lst

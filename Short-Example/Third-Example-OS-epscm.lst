@@ -1,0 +1,1332 @@
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 1
+"M E T R O  M A P  A U T O M A T I O N"
+C o m p i l a t i o n
+
+
+      March 21 2013
+      SMALL WORKING MODEL
+      MIP Metro Map Automation
+      number of vertices n = 4
+      number of edges m = 3
+      number of multiedges m' =  0
+      number of faces f = 1
+  13   
+  14  * replace g(u,u) with h(u,u) when dealing epscm!!!
+  15   
+  16  *=========================================================================
+  17  *                                  DATA
+  18  *=========================================================================
+  19  SETS
+  20  u           "vertices"           /1*11/
+  21  b(u)        "subset of vertices with more than one spanning edge"
+  22  ml          "metro lines"        / 1  "r"
+  23                                     2  "g"
+  24                                     3  "b"
+  25                                     4  "DarkOrange"
+  26                                     /
+  27  r           "relative position"  / prec, orig, succ /
+  28  c           "compass directions" / N, S, E, W, NE, NW, SE, SW /
+  29  e(u,u)      "edges as directed and undirected pairs"
+  30  f(u,u)      "undirected edges"
+  31  h(u,u)      "opposite directed edge"
+  32  n(u,u,u,u)  "nonincident edges"
+  33  S           "cost factors"       /1*3/
+  34  j(u,u)      "set of degrees"
+  35  k           "objective functions"   / bend, rposition / ; [edgelength / ;]
+  36   
+  37   
+  38  Alias (u, v, w, ww);
+  39   
+  40   
+  41  Scalars
+  42          M     "maximum length or width of map" / 52 /
+  43          lmin  "minimum edge length"            / 2 /
+  44          dmin  "minimum edge distance"          / 3 /
+  45          ;
+  46   
+  47  PARAMETERS
+  48      deg(u)  degree  /1   1
+  49                       2   3
+  50                       3   4
+  51                       4   4
+  52                       5   4
+  53                       6   1
+  54                       7   2
+  55                       8   2
+  56                       9   2
+  57                       10  2
+  58                       11  1
+  59                       /
+  60   
+  61  * 1: bend cost,  2: relative position cost,   3: total edge length
+  62      weight(S) weights / 1  .5
+  63                          2  .5
+  64                          3  .2 / ;
+  65   
+  66   
+  67  * Specifying vertices subject to the circular vertex order constraint (H2)
+  68  * Condition: degree of vertex must be greater than 2
+  69  b(u)=yes$(deg(u) ge 2);
+  70   
+  71   
+  72  * INCIDENCES
+  73  TABLE   order(u,v) ordered vertex neighbor incidence
+  74          1  2  3  4  5  6  7  8  9  10 11
+  75      1
+  76      2   1     1  1
+  77      3      1     1  1              1
+  78      4      1  1     1        1
+  79      5         1  1     1  1
+  80      6
+  81      7               1           1
+  82      8            1              1
+  83      9                     1  1
+  84      10        1                       1
+  85      11
+  86      ;
+  87   
+  88  j(u,v)=yes$order(u,v)  ;
+  89   
+  90  TABLE   path(u,v) directed path incidence
+  91          1  2  3  4  5  6  7  8  9  10 11
+  92      1      1
+  93      2   1     1  1
+  94      3      1     1  1              1
+  95      4      1  1     1        1
+  96      5         1  1     1  1
+  97      6               1
+  98      7               1           1
+  99      8            1              1
+ 100      9                     1  1
+ 101      10        1                       1
+ 102      11                             1
+ 103      ;
+ 104   
+ 105  TABLE   upath(u,v) undirected path incidence
+ 106          1  2  3  4  5  6  7  8  9  10 11
+ 107      1      1
+ 108      2         1  1
+ 109      3               1              1
+ 110      4         1     1
+ 111      5                  1  1
+ 112      6
+ 113      7
+ 114      8            1
+ 115      9                     1  1
+ 116      10                                1
+ 117      11
+ 118      ;
+ 119   
+ 120  TABLE   opath(u,v) directed path incidence (opposite sense)
+ 121          1  2  3  4  5  6  7  8  9  10 11
+ 122      1
+ 123      2   1
+ 124      3      1     1
+ 125      4      1                 1
+ 126      5         1  1
+ 127      6               1
+ 128      7               1           1
+ 129      8                           1
+ 130      9
+ 131      10        1
+ 132      11                             1
+ 133      ;
+ 134   
+ 135  * Define edges
+ 136  e(u,v) = yes$path(u,v);
+ 137  f(u,v) = yes$upath(u,v);
+ 138  h(u,v) = yes$opath(u,v); // replace g with h
+ 139   
+ 140   
+ 141  TABLE   e2e(u,v,w,ww) edge-to-edge incidence
+ 142            1.2   2.3   2.4   3.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.
+      8   10.11
+ 143      1.2         1     1
+ 144      2.3                     1     1     1
+ 145      2.4                                       1     1
+ 146      3.5                                                   1     1
+ 147      3.10                                                                            
+          1
+ 148      4.3         1                 1     1           1
+ 149      4.5                           1                       1     1
+ 150      5.6
+ 151      5.7
+ 152      8.4
+ 153      9.7
+ 154      9.8
+ 155      10.11
+ 156   
+ 157  TABLE   ne2e(u,v,w,ww) edge-to-edge non-incidence same face
+ 158            1.2   2.3   2.4   3.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.
+      8   10.11
+ 159      1.2                                 1                 1                         
+          1
+ 160      2.3
+ 161      2.4
+ 162      3.5
+ 163      3.10
+ 164      4.3
+ 165      4.5                                                                     1     1
+ 166      5.6
+ 167      5.7
+ 168      8.4                                                         1           1
+ 169      9.7
+ 170      9.8                                                         1
+ 171      10.11
+ 172      ;
+ 173   
+ 174  * Define nonincident edges
+ 175  n(u,v,w,ww) = yes$ne2e(u,v,w,ww);
+ 176   
+ 177  TABLE   sec(r,u,v) sector positioning
+ 178              1   2   3   4   5   6   7   8   9   10  11
+ 179      orig.1      0
+ 180      orig.2  4       2   1
+ 181      orig.3      6       7   0                   4
+ 182      orig.4      5   3       2           7
+ 183      orig.5          4   6       1   0
+ 184      orig.6                  5
+ 185      orig.7                  4               6
+ 186      orig.8              3                   0
+ 187      orig.9                          2   4
+ 188      orig.10         0                                2
+ 189      orig.11                                     6
+ 190      prec.1      7
+ 191      prec.2  3       1   0
+ 192      prec.3      5       6   7                   3
+ 193      prec.4      4   2       1           6
+ 194      prec.5          3   5       0   7
+ 195      prec.6                  4
+ 196      prec.7                  3               5
+ 197      prec.8              2                   7
+ 198      prec.9                          1   3
+ 199      prec.10         7                                1
+ 200      prec.11                                     5
+ 201      succ.1      1
+ 202      succ.2  5       3   2
+ 203      succ.3      7       0   1                   5
+ 204      succ.4      6   4       3           0
+ 205      succ.5          5   7       2   1
+ 206      succ.6                  6
+ 207      succ.7                  5               7
+ 208      succ.8              4                   1
+ 209      succ.9                          3   5
+ 210      succ.10         1                                3
+ 211      succ.11                                     7
+ 212   
+ 213  TABLE   lin(ml,u,v)  metro lines
+ 214           1.2   2.3   2.4   3.5   3.10  4.3   4.5   5.6   5.7   8.4   9.7   9.8   10.
+      11
+ 215      1    1           1                       1     1
+ 216      2          1           1                             1
+ 217      3                            1     1                       1           1     1
+ 218      4                                                                1
+ 219      ;
+ 220   
+ 221  TABLE   lin2(ml,u) stations per line
+ 222           1   2   3   4   5   6   7   8   9   10  11
+ 223      1    1   1       1   1   1
+ 224      2        1   1       1       1
+ 225      3            1   1               1   1   1   1
+ 226      4                            1       1
+ 227  ;
+ 228   
+ 229  *=========================================================================
+ 230  *                                VARIABLES
+ 231  *=========================================================================
+ 232  VARIABLES
+ 233    z(k)                objective func variables
+ 234    deltadir(ml,u,v,w)  sector difference btw adjacent egdes uv and uw as measure of a
+      ngle btw
+ 235    z2(u)               -45 degree coordinate;
+ 236   
+ 237  *INTEGER VARIABLES
+ 238  *;
+ 239   
+ 240   
+ 241  POSITIVE VARIABLES
+ 242    x(u)      x coordinate
+ 243    y(u)      y coordinate
+ 244    z1(u)     +45 degree coordinate
+ 245    dir(u,v)         octilinear direction of edge uv
+ 246    lambda(u,v)      upper bound on edge length
+ 247    costS1           total line bend cost
+ 248    costS2           total relative position cost
+ 249    costS3           total edge length cost
+ 250    bd(ml,u,v,w)        bend cost of angle between uv and vw
+ 251    ;
+ 252   
+ 253   
+ 254  BINARY VARIABLES
+ 255    alpha(u,v,r)   closest octilinear approximation
+ 256    beta(u,v)
+ 257    delta1(ml,u,v,w)
+ 258    delta2(ml,u,v,w)
+ 259    rpos(u,v)        relative position penalty
+ 260    gamma(u,v,w,ww,c) binary variable selecting compass orientation
+ 261    ;
+ 262   
+ 263   
+ 264   
+ 265   
+ 266  *=========================================================================
+ 267  *                               EQUATIONS
+ 268  *=========================================================================
+ 269  EQUATIONS
+ 270    xlim(u)
+ 271    ylim(u)
+ 272    defz1(u)
+ 273    defz2(u)
+ 274    octicon1(u,v)
+ 275    octicon2a(u,v), octicon2b(u,v)
+ 276    octicon3a(r,u,v),octicon3b(r,u,v),octicon3c(r,u,v)
+ 277    octicon3d(r,u,v),octicon3e(r,u,v),octicon3f(r,u,v)
+ 278    octicon3g(r,u,v),octicon3h(r,u,v),octicon3i(r,u,v)
+ 279    octicon3j(r,u,v),octicon3k(r,u,v),octicon3l(r,u,v)
+ 280    octicon3m(r,u,v),octicon3n(r,u,v),octicon3o(r,u,v)
+ 281    octicon3p(r,u,v),octicon3q(r,u,v),octicon3r(r,u,v)
+ 282    octicon3s(r,u,v),octicon3t(r,u,v),octicon3u(r,u,v)
+ 283    octicon3v(r,u,v),octicon3w(r,u,v),octicon3x(r,u,v)
+ 284    cvocon1(u)
+ 285    cvocon2a, cvocon2b, cvocon2c,
+ 286    cvocon3a, cvocon3b, cvocon3c, cvocon3d
+ 287    cvocon4a, cvocon4b, cvocon4c, cvocon4d
+ 288    cvocon5a, cvocon5b, cvocon5c, cvocon5d
+ 289    cvocon7a, cvocon7b
+ 290    cvocon8a, cvocon8b
+ 291    cvocon9a, cvocon9b
+ 292    cvocon10a, cvocon10b
+ 293    edgecon(u,v,w,ww)
+ 294    edgeconE1(u,v,w,ww),  edgeconE2(u,v,w,ww),  edgeconE3(u,v,w,ww),  edgeconE4(u,v,w,
+      ww)
+ 295    edgeconNE1(u,v,w,ww), edgeconNE2(u,v,w,ww), edgeconNE3(u,v,w,ww), edgeconNE4(u,v,w
+      ,ww)
+ 296    edgeconN1(u,v,w,ww),  edgeconN2(u,v,w,ww),  edgeconN3(u,v,w,ww),  edgeconN4(u,v,w,
+      ww)
+ 297    edgeconNW1(u,v,w,ww), edgeconNW2(u,v,w,ww), edgeconNW3(u,v,w,ww), edgeconNW4(u,v,w
+      ,ww)
+ 298    edgeconW1(u,v,w,ww),  edgeconW2(u,v,w,ww),  edgeconW3(u,v,w,ww),  edgeconW4(u,v,w,
+      ww)
+ 299    edgeconSW1(u,v,w,ww), edgeconSW2(u,v,w,ww), edgeconSW3(u,v,w,ww), edgeconSW4(u,v,w
+      ,ww)
+ 300    edgeconS1(u,v,w,ww),  edgeconS2(u,v,w,ww),  edgeconS3(u,v,w,ww),  edgeconS4(u,v,w,
+      ww)
+ 301    edgeconSE1(u,v,w,ww), edgeconSE2(u,v,w,ww), edgeconSE3(u,v,w,ww), edgeconSE4(u,v,w
+      ,ww)
+ 302    telcon1(u,v)
+ 303    telcon2(u,v)
+ 304    telcon3(u,v)
+ 305    telcon4(u,v)
+ 306    rposcon1(u,v)
+ 307    rposcon2(u,v)
+ 308    ddi(ml,u,v,w)
+ 309    bendcon1(ml,u,v,w)
+ 310    bendcon2(ml,u,v,w)
+ 311    objbend
+ 312    objrpos;
+ 313   
+ 314  * Map limits
+ 315  xlim(u).. x(u) =l= M;
+ 316  ylim(u).. y(u) =l= M;
+ 317   
+ 318  * Z coordinates
+ 319  defz1(u).. z1(u) =e= (x(u) + y(u))/2;
+ 320  defz2(u).. z2(u) =e= (x(u) - y(u))/2;
+ 321   
+ 322  * Octilinearity constraints  (H1, H3)
+ 323  octicon1(u,v)$f(u,v)..     sum(r, alpha(u,v,r)) =e= 1;
+ 324  octicon2a(u,v)$f(u,v)..    dir(u,v) =e= sum(r,(sec(r,u,v)*alpha(u,v,r))) ;
+ 325  octicon2b(u,v)$h(u,v)..    dir(u,v) =e= sum(r,(sec(r,u,v)*alpha(v,u,r))) ;//replace 
+      g w/ h
+ 326   
+ 327  octicon3a(r,u,v)$(sec(r,u,v)=0 and f(u,v))..   y(u) - y(v) =l=  M*(1-alpha(u,v,r));
+ 328  octicon3b(r,u,v)$(sec(r,u,v)=0 and f(u,v))..  -y(u) + y(v) =l=  M*(1-alpha(u,v,r));
+ 329  octicon3c(r,u,v)$(sec(r,u,v)=0 and f(u,v))..  -x(u) + x(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 330   
+ 331  octicon3d(r,u,v)$(sec(r,u,v)=1 and f(u,v))..   z2(u) - z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 332  octicon3e(r,u,v)$(sec(r,u,v)=1 and f(u,v))..  -z2(u) + z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 333  octicon3f(r,u,v)$(sec(r,u,v)=1 and f(u,v))..  -z1(u) + z1(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 334   
+ 335  octicon3g(r,u,v)$(sec(r,u,v)=2 and f(u,v))..   x(u) - x(v) =l=  M*(1-alpha(u,v,r));
+ 336  octicon3h(r,u,v)$(sec(r,u,v)=2 and f(u,v))..  -x(u) + x(v) =l=  M*(1-alpha(u,v,r));
+ 337  octicon3i(r,u,v)$(sec(r,u,v)=2 and f(u,v))..  -y(u) + y(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 338   
+ 339  octicon3j(r,u,v)$(sec(r,u,v)=3 and f(u,v))..   z1(u) - z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 340  octicon3k(r,u,v)$(sec(r,u,v)=3 and f(u,v))..  -z1(u) + z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 341  octicon3l(r,u,v)$(sec(r,u,v)=3 and f(u,v))..   z2(u) - z2(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 342   
+ 343  octicon3m(r,u,v)$(sec(r,u,v)=4 and f(u,v))..   y(u) - y(v) =l=  M*(1-alpha(u,v,r));
+ 344  octicon3n(r,u,v)$(sec(r,u,v)=4 and f(u,v))..  -y(u) + y(v) =l=  M*(1-alpha(u,v,r));
+ 345  octicon3o(r,u,v)$(sec(r,u,v)=4 and f(u,v))..   x(u) - x(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 346   
+ 347  octicon3p(r,u,v)$(sec(r,u,v)=5 and f(u,v))..   z2(u) - z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 348  octicon3q(r,u,v)$(sec(r,u,v)=5 and f(u,v))..  -z2(u) + z2(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 349  octicon3r(r,u,v)$(sec(r,u,v)=5 and f(u,v))..   z1(u) - z1(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 350   
+ 351  octicon3s(r,u,v)$(sec(r,u,v)=6 and f(u,v))..   x(u) - x(v) =l=  M*(1-alpha(u,v,r));
+ 352  octicon3t(r,u,v)$(sec(r,u,v)=6 and f(u,v))..  -x(u) + x(v) =l=  M*(1-alpha(u,v,r));
+ 353  octicon3u(r,u,v)$(sec(r,u,v)=6 and f(u,v))..   y(u) - y(v) =g= -M*(1-alpha(u,v,r)) +
+       lmin;
+ 354   
+ 355  octicon3v(r,u,v)$(sec(r,u,v)=7 and f(u,v))..   z1(u) - z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 356  octicon3w(r,u,v)$(sec(r,u,v)=7 and f(u,v))..  -z1(u) + z1(v) =l=  M*(1-alpha(u,v,r))
+      ;
+ 357  octicon3x(r,u,v)$(sec(r,u,v)=7 and f(u,v))..  -z2(u) + z2(v) =g= -M*(1-alpha(u,v,r))
+       + lmin;
+ 358   
+ 359   
+ 360  * Circular vertex orders (H2)
+ 361  cvocon1(b).. sum(v, beta(b,v)$j(b,v)) =e= 1;
+ 362   
+ 363  cvocon2a.. dir('2','4') =l= dir('2','3')  - 1 + 8*beta('2','4');
+ 364  cvocon2b.. dir('2','3') =l= dir('2','1')  - 1 + 8*beta('2','3');
+ 365  cvocon2c.. dir('2','1') =l= dir('2','4')  - 1 + 8*beta('2','1');
+ 366   
+ 367  cvocon3a.. dir('3','5') =l= dir('3','10')  - 1 + 8*beta('3','5');
+ 368  cvocon3b.. dir('3','10') =l= dir('3','2')  - 1 + 8*beta('3','10');
+ 369  cvocon3c.. dir('3','2') =l= dir('3','4')  - 1 + 8*beta('3','2');
+ 370  cvocon3d.. dir('3','4') =l= dir('3','5')  - 1 + 8*beta('3','4');
+ 371   
+ 372   
+ 373  cvocon4a.. dir('4','5') =l= dir('4','3')  - 1 + 8*beta('4','5');
+ 374  cvocon4b.. dir('4','3') =l= dir('4','2')  - 1 + 8*beta('4','3');
+ 375  cvocon4c.. dir('4','2') =l= dir('4','8')  - 1 + 8*beta('4','2');
+ 376  cvocon4d.. dir('4','8') =l= dir('4','5')  - 1 + 8*beta('4','8');
+ 377   
+ 378  cvocon5a.. dir('5','7') =l= dir('5','6')  - 1 + 8*beta('5','7');
+ 379  cvocon5b.. dir('5','6') =l= dir('5','3')  - 1 + 8*beta('5','6');
+ 380  cvocon5c.. dir('5','3') =l= dir('5','4')  - 1 + 8*beta('5','3');
+ 381  cvocon5d.. dir('5','4') =l= dir('5','7')  - 1 + 8*beta('5','4');
+ 382   
+ 383  cvocon7a.. dir('7','5') =l= dir('7','9')  - 1 + 8*beta('7','5');
+ 384  cvocon7b.. dir('7','9') =l= dir('7','5')  - 1 + 8*beta('7','9');
+ 385   
+ 386  cvocon8a.. dir('8','9') =l= dir('8','4')  - 1 + 8*beta('8','9');
+ 387  cvocon8b.. dir('8','4') =l= dir('8','9')  - 1 + 8*beta('8','4');
+ 388   
+ 389  cvocon9a.. dir('9','7') =l= dir('9','8')  - 1 + 8*beta('9','7');
+ 390  cvocon9b.. dir('9','8') =l= dir('9','7')  - 1 + 8*beta('9','8');
+ 391   
+ 392  cvocon10a.. dir('10','3') =l= dir('10','11')  - 1 + 8*beta('10','3');
+ 393  cvocon10b.. dir('10','11') =l= dir('10','3')  - 1 + 8*beta('10','11');
+ 394   
+ 395  * Edge spacing constraints (H4)
+ 396  edgecon(n).. sum(c, gamma(n,c)) =g= 1;
+ 397   
+ 398  edgeconE1(u,v,w,ww)$n(u,v,w,ww).. x(w) - x(u)  =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 399  edgeconE2(u,v,w,ww)$n(u,v,w,ww).. x(w) - x(v)  =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 400  edgeconE3(u,v,w,ww)$n(u,v,w,ww).. x(ww) - x(u) =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 401  edgeconE4(u,v,w,ww)$n(u,v,w,ww).. x(ww) - x(v) =l= M*(1 - gamma(u,v,w,ww,'E')) - dmi
+      n ;
+ 402   
+ 403  edgeconNE1(u,v,w,ww)$n(u,v,w,ww).. z1(w) - z1(u)  =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 404  edgeconNE2(u,v,w,ww)$n(u,v,w,ww).. z1(w) - z1(v)  =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 405  edgeconNE3(u,v,w,ww)$n(u,v,w,ww).. z1(ww) - z1(u) =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 406  edgeconNE4(u,v,w,ww)$n(u,v,w,ww).. z1(ww) - z1(v) =l= M*(1 - gamma(u,v,w,ww,'NE')) -
+       dmin ;
+ 407   
+ 408  edgeconN1(u,v,w,ww)$n(u,v,w,ww).. y(w) - y(u)  =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 409  edgeconN2(u,v,w,ww)$n(u,v,w,ww).. y(w) - y(v)  =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 410  edgeconN3(u,v,w,ww)$n(u,v,w,ww).. y(ww) - y(u) =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 411  edgeconN4(u,v,w,ww)$n(u,v,w,ww).. y(ww) - y(v) =l= M*(1 - gamma(u,v,w,ww,'N')) - dmi
+      n ;
+ 412   
+ 413  edgeconNW1(u,v,w,ww)$n(u,v,w,ww).. -z2(w) + z2(u)  =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 414  edgeconNW2(u,v,w,ww)$n(u,v,w,ww).. -z2(w) + z2(v)  =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 415  edgeconNW3(u,v,w,ww)$n(u,v,w,ww).. -z2(ww) + z2(u) =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 416  edgeconNW4(u,v,w,ww)$n(u,v,w,ww).. -z2(ww) + z2(v) =l= M*(1 - gamma(u,v,w,ww,'NW')) 
+      - dmin ;
+ 417   
+ 418  edgeconW1(u,v,w,ww)$n(u,v,w,ww).. -x(w) + x(u)  =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 419  edgeconW2(u,v,w,ww)$n(u,v,w,ww).. -x(w) + x(v)  =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 420  edgeconW3(u,v,w,ww)$n(u,v,w,ww).. -x(ww) + x(u) =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 421  edgeconW4(u,v,w,ww)$n(u,v,w,ww).. -x(ww) + x(v) =l= M*(1 - gamma(u,v,w,ww,'W')) - dm
+      in ;
+ 422   
+ 423  edgeconSW1(u,v,w,ww)$n(u,v,w,ww).. -z1(w) + z1(u)  =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 424  edgeconSW2(u,v,w,ww)$n(u,v,w,ww).. -z1(w) + z1(v)  =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 425  edgeconSW3(u,v,w,ww)$n(u,v,w,ww).. -z1(ww) + z1(u) =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 426  edgeconSW4(u,v,w,ww)$n(u,v,w,ww).. -z1(ww) + z1(v) =l= M*(1 - gamma(u,v,w,ww,'SW')) 
+      - dmin ;
+ 427   
+ 428  edgeconS1(u,v,w,ww)$n(u,v,w,ww).. -y(w) + y(u)  =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 429  edgeconS2(u,v,w,ww)$n(u,v,w,ww).. -y(w) + y(v)  =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 430  edgeconS3(u,v,w,ww)$n(u,v,w,ww).. -y(ww) + y(u) =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 431  edgeconS4(u,v,w,ww)$n(u,v,w,ww).. -y(ww) + y(v) =l= M*(1 - gamma(u,v,w,ww,'S')) - dm
+      in ;
+ 432   
+ 433  edgeconSE1(u,v,w,ww)$n(u,v,w,ww).. z2(w) - z2(u)  =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 434  edgeconSE2(u,v,w,ww)$n(u,v,w,ww).. z2(w) - z2(v)  =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 435  edgeconSE3(u,v,w,ww)$n(u,v,w,ww).. z2(ww) - z2(u) =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 436  edgeconSE4(u,v,w,ww)$n(u,v,w,ww).. z2(ww) - z2(v) =l= M*(1 - gamma(u,v,w,ww,'SE')) -
+       dmin ;
+ 437   
+ 438   
+ 439  * Line Bends (S1 - soft constraint 1)
+ 440  ddi(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w)).. deltadir(ml,u,v,w) =e= dir(u,v) - dir(
+      v,w);
+ 441   
+ 442  *$(f(u,v) and f(v,w))
+ 443   
+ 444  * Bend constraints
+ 445  bendcon1(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w))..  bd(ml,u,v,w) =g= deltadir(ml,u,v
+      ,w) - 8*delta1(ml,u,v,w) + 8*delta2(ml,u,v,w);
+ 446  bendcon2(ml,u,v,w)$(lin(ml,u,v) and lin(ml,v,w)).. -bd(ml,u,v,w) =l= deltadir(ml,u,v
+      ,w) - 8*delta1(ml,u,v,w) + 8*delta2(ml,u,v,w);
+ 447   
+ 448  * Relative position constraint S2
+ 449  rposcon1(f)..   M*rpos(f) =g= dir(f) - sec('orig',f);
+ 450  rposcon2(f)..  -M*rpos(f) =l= dir(f) - sec('orig',f);
+ 451   
+ 452  * Total edge length S3 constraints
+ 453  telcon1(u,v)$f(u,v)..  x(u) - x(v) =l= 4;
+ 454  telcon2(u,v)$f(u,v).. -x(u) + x(v) =l= 4;
+ 455  telcon3(u,v)$f(u,v)..  y(u) - y(v) =l= 4;
+ 456  telcon4(u,v)$f(u,v).. -y(u) + y(v) =l= 4;
+ 457   
+      telcon1(u,v)$f(u,v)..  x(u) - x(v) =l= lambda(u,v);
+      telcon2(u,v)$f(u,v).. -x(u) + x(v) =l= lambda(u,v);
+      telcon3(u,v)$f(u,v)..  y(u) - y(v) =l= lambda(u,v);
+      telcon4(u,v)$f(u,v).. -y(u) + y(v) =l= lambda(u,v);
+ 464   
+ 465   
+ 466  *OBJECTIVE
+ 467  objbend.. z('bend') =e= sum(ml, sum( (u,v,w)$(lin(ml,u,v) and lin(ml,v,w)), bd(ml,u,
+      v,w) )  );
+ 468  objrpos.. z('rposition') =e= sum(f, rpos(f));
+ 469  *objtel..  z('edgelength') =e= sum(f, lambda(f));
+ 470   
+ 471  *x.fx('1') = 6.2;
+ 472  *x.fx('8') = 12.2;
+ 473  *x.lo()
+ 474  *=========================================================================
+ 475  *                               MODEL
+ 476  *=========================================================================
+ 477  MODEL automap /   xlim, ylim
+ 478                    defz1
+ 479                    defz2
+ 480                    octicon1
+ 481                    octicon2a
+ 482                    octicon2b
+ 483                    octicon3a, octicon3b, octicon3c
+ 484                    octicon3d, octicon3e, octicon3f
+ 485                    octicon3g, octicon3h, octicon3i
+ 486                    octicon3j, octicon3k, octicon3l
+ 487                    octicon3m, octicon3n, octicon3o
+ 488                    octicon3p, octicon3q, octicon3r
+ 489                    octicon3s, octicon3t, octicon3u
+ 490                    octicon3v, octicon3w, octicon3x
+ 491                    cvocon1
+ 492                    cvocon2a, cvocon2b, cvocon2c,
+ 493                    cvocon3a, cvocon3b, cvocon3c, cvocon3d
+ 494                    cvocon4a, cvocon4b, cvocon4c, cvocon4d
+ 495                    cvocon5a, cvocon5b, cvocon5c, cvocon5d
+ 496                    cvocon7a, cvocon7b
+ 497                    cvocon8a, cvocon8b
+ 498                    cvocon9a, cvocon9b
+ 499                    cvocon10a, cvocon10b
+ 500                    edgecon
+ 501                    edgeconE1,  edgeconE2,  edgeconE3,  edgeconE4
+ 502                    edgeconNE1, edgeconNE2, edgeconNE3, edgeconNE4
+ 503                    edgeconN1,  edgeconN2,  edgeconN3,  edgeconN4
+ 504                    edgeconNW1, edgeconNW2, edgeconNW3, edgeconNW4
+ 505                    edgeconW1,  edgeconW2,  edgeconW3,  edgeconW4
+ 506                    edgeconSW1, edgeconSW2, edgeconSW3, edgeconSW4
+ 507                    edgeconS1,  edgeconS2,  edgeconS3,  edgeconS4
+ 508                    edgeconSE1, edgeconSE2, edgeconSE3, edgeconSE4
+ 509                    telcon1, telcon2, telcon3, telcon4
+ 510                    rposcon1, rposcon2
+ 511                    bendcon1, bendcon2
+ 512                    ddi
+ 513                    objbend, objrpos
+ 514                    /;
+ 515   
+ 516   
+ 517   
+ 518   
+ 519   
+ 520   
+ 521   
+ 522  *=========================================================================
+ 523  *                         CONSTRAINT METHOD
+ 524  *=========================================================================
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 2
+"M E T R O  M A P  A U T O M A T I O N"
+eps-constraint method
+
+
+ 526   
+ 527  Set k1(k)  the first element of k,
+ 528      km1(k) all but the first elements of k
+ 529      kk(k)  active objective function in constraint allobj;
+ 530  k1(k)$(ord(k)=1) = yes; km1(k)=yes; km1(k1) = no;
+ 531   
+ 532  Parameter
+ 533      rhs(k)     right hand side of the constrained obj functions in eps-constraint
+ 534      maxobj(k)  maximum value from the payoff table
+ 535      minobj(k)  minimum value from the payoff table
+ 536      numk(k)    ordinal value of k starting with 1
+ 537  Scalar
+ 538      iter         total number of iterations
+ 539      infeas       total number of infeasibilities
+ 540      elapsed_time elapsed time for payoff and e-sonstraint
+ 541      start        start time
+ 542      finish       finish time
+ 543  Variables
+ 544     a_objval   auxiliary variable for the objective function
+ 545     obj        auxiliary variable during the construction of the payoff table
+ 546     sl(k)      slack or surplus variables for the eps-constraints
+ 547  Positive Variables sl
+ 548  Equations
+ 549     con_obj(k) constrained objective functions
+ 550     augm_obj   augmented objective function to avoid weakly efficient solutions
+ 551     allobj     all the objective functions in one expression;
+ 552   
+ 553  con_obj(km1)..   z(km1) + sl(km1) =e= rhs(km1);
+ 554   
+ 555  * We optimize the first objective function and put the others as constraints
+ 556  * the second term is for avoiding weakly efficient points
+ 557   
+ 558  augm_obj.. a_objval =e= sum(k1, z(k1))
+ 559      - 1e-3*sum(km1,power(10,-(numk(km1)-1))*sl(km1)/(maxobj(km1)-minobj(km1)));
+ 560   
+ 561  allobj..  sum(kk, z(kk)) =e= obj;
+ 562   
+ 563  Model mod_payoff    / automap, allobj / ;
+ 564  Model mod_epsmethod / automap, con_obj, augm_obj / ;
+ 565   
+ 566  Parameter
+ 567     payoff(k,k)  payoff tables entries;
+ 568  Alias(k,kp);
+ 569   
+ 570  option optcr=0, limrow=0, limcol=0, solprint=off, solvelink=5;
+ 571   
+ 572  * Generate payoff table applying lexicographic optimization
+ 573  loop(kp,
+ 574    kk(kp)=yes;
+ 575    repeat
+ 576      solve mod_payoff using mip minimizing obj;
+ 577      payoff(kp,kk) = z.l(kk);
+ 578      z.fx(kk) = z.l(kk); // freeze the value of the last objective optimized
+ 579      kk(k++1) = kk(k);   // cycle through the objective functions
+ 580    until kk(kp); kk(kp) = no;
+ 581  * release the fixed values of the objective functions for the new iteration
+ 582    z.up(k) = inf; z.lo(k) =-inf;
+ 583  );
+ 584  if (mod_payoff.modelstat<>1 and
+ 585      mod_payoff.modelstat<>8,
+ 586     abort 'no optimal solution for mod_payoff');
+ 587   
+ 588  file fx  / third-example_results.txt /;
+ 589  ***
+ 590  *** File holding coordinates
+ 591  file pareto / thirdexamplefrontier.csv /;     put pareto 'x1'',', 'x2'',','y1'',', '
+      y2'',','ln'',','co'/;
+ 592  put fx ' PAYOFF TABLE'/   ;
+ 593  loop (kp,
+ 594     loop(k, put payoff(kp,k):12:2);
+ 595     put /);
+ 596   
+ 597  minobj(k)=smin(kp,payoff(kp,k));
+ 598  maxobj(k)=smax(kp,payoff(kp,k));
+ 599   
+ 600  * gridpoints are calculated as the range (difference between max and min) of
+ 601  * the 2nd objective function from the payoff table
+ 603  Set g            grid points /g0*g4/
+ 604      grid(k,g)    grid
+ 605  Parameter
+ 606      gridrhs(k,g) rhs of eps-constraint at grid point
+ 607      maxg(k)      maximum point in grid for objective
+ 608      posg(k)      grid position of objective
+ 609      firstOffMax, lastZero some counters
+ 610  *    numk(k) ordinal value of k starting with 1
+ 611      numg(g)      ordinal value of g starting with 0
+ 612      step(k)      step of grid points in objective functions
+ 613      jump(k)      jumps in the grid points traversing;
+ 614   
+ 615  lastZero=1; loop(km1, numk(km1)=lastZero; lastZero=lastZero+1); numg(g) = ord(g)-1;
+ 616   
+ 617  grid(km1,g) = yes; // Here we could define different grid intervals for different ob
+      jectives
+ 618  maxg(km1)   = smax(grid(km1,g), numg(g));
+ 619  step(km1)   = (maxobj(km1)- minobj(km1))/maxg(km1);
+ 620  gridrhs(grid(km1,g))  = maxobj(km1) - numg(g)/maxg(km1)*(maxobj(km1)- minobj(km1));
+ 621   
+ 622   
+ 623  put / ' Grid points' /;
+ 624  loop (g,
+ 625     loop(km1, put gridrhs(km1,g):12:2);
+ 626     put /);
+ 627  put / 'Efficient solutions' /;
+ 628   
+ 629  * Walk the grid points and take shortcuts if the model becomes infeasible or
+ 630  * if the calculated slack variables are greater than the step size
+ 631  posg(km1) = 0; iter=0; infeas=0; start=jnow;
+ 632   
+ 633  repeat
+ 634    put fx ;
+ 635    rhs(km1) = sum(grid(km1,g)$(numg(g)=posg(km1)), gridrhs(km1,g));
+ 636    solve mod_epsmethod minimizing a_objval using mip;
+ 637    iter=iter+1;
+ 638    if (mod_epsmethod.modelstat<>1 and
+ 639        mod_epsmethod.modelstat<>8,
+ 640      infeas=infeas+1;   // not optimal is in this case infeasible
+ 641      put iter:5:0, '  infeasible' /;
+ 642      lastZero = 0; loop(km1$(posg(km1)>0 and lastZero=0), lastZero=numk(km1));
+ 643      posg(km1)$(numk(km1)<=lastZero) = maxg(km1); // skip all solves for more demandi
+      ng values of rhs(km1)
+ 644    else
+ 645      put fx iter:5:0;
+ 646      loop(k, put fx z.l(k):12:2);
+ 647      jump(km1)=1;
+ 648  *   find the first off max (obj function that hasn't reach the final grid point).
+ 649  *   If this obj.fun is k then assign jump for the 1..k-th objective functions
+ 650  *   The jump is calculated for the innermost objective function (km=1)
+ 651      jump(km1)$(numk(km1)=1)=1+floor(sl.L(km1)/step(km1));
+ 652      loop(km1$(jump(km1)>1), put '   jump');
+ 653      put /;
+ 654  *   coordinate file
+ 655      put  pareto ;
+ 656      pareto.lj=1; // set label justification to right (value 1) (left=2,center=3)
+ 657      loop((ml,u,v), put$(lin(ml,u,v)) x.l(u)',', x.l(v)',',y.l(u)',',y.l(v)',', ord(m
+      l)',', ml.te(ml)/);
+ 658  *   KEEP in mind that lin(ml,u,v) is entered as lin(u,v,ml) in Vienna
+ 659      );
+ 660  * Proceed forward in the grid
+ 661    firstOffMax = 0;
+ 662    loop(km1$(posg(km1)<maxg(km1) and firstOffMax=0),
+ 663       posg(km1)=min((posg(km1)+jump(km1)),maxg(km1)); firstOffMax=numk(km1));
+ 664    posg(km1)$(numk(km1)<firstOffMax) = 0;
+ 665  until sum(km1$(posg(km1)=maxg(km1)),1)= card(km1) and firstOffMax=0;
+ 666   
+ 667  finish=jnow; elapsed_time=(finish-start)*60*60*24;
+ 668  put fx;
+ 669  put /;
+ 670  put 'Infeasibilities = ', infeas:5:0 /;
+ 671  put 'Elapsed time: ',elapsed_time:10:2, ' seconds' / ;
+ 672   
+ 673  *display x.l;
+
+
+COMPILATION TIME     =        0.007 SECONDS      3 MB  24.2.2 r44857 XXX-DEG
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 3
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_payoff Using MIP From line 576
+
+
+LOOPS                                   kp   bend
+                                 FOR/WHILE   1
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         100     SINGLE EQUATIONS          603
+BLOCKS OF VARIABLES          15     SINGLE VARIABLES          248
+NON ZERO ELEMENTS         1,778     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.016 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S                 kp bend
+                                  FOR/WHILE 1
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 4
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_payoff Using MIP From line 576
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_payoff          OBJECTIVE  obj
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  576
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                4.0000
+
+ RESOURCE USAGE, LIMIT          0.839      1000.000
+ ITERATION COUNT, LIMIT     13444    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.80sec (det. 552.29 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.70 ticks)
+Proven optimal solution.
+
+MIP Solution:            4.000000    (13427 iterations, 1327 nodes)
+Final Solve:             4.000000    (17 iterations)
+
+Best possible:           4.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 5
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_payoff Using MIP From line 576
+
+
+LOOPS                                   kp   bend
+                                 FOR/WHILE   2
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         100     SINGLE EQUATIONS          603
+BLOCKS OF VARIABLES          15     SINGLE VARIABLES          248
+NON ZERO ELEMENTS         1,778     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.003 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S                 kp bend
+                                  FOR/WHILE 2
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 6
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_payoff Using MIP From line 576
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_payoff          OBJECTIVE  obj
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  576
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                9.0000
+
+ RESOURCE USAGE, LIMIT          0.433      1000.000
+ ITERATION COUNT, LIMIT      4825    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.42sec (det. 197.66 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.70 ticks)
+Proven optimal solution.
+
+MIP Solution:            9.000000    (4807 iterations, 354 nodes)
+Final Solve:             9.000000    (18 iterations)
+
+Best possible:           9.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 7
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_payoff Using MIP From line 576
+
+
+LOOPS                                   kp   rposition
+                                 FOR/WHILE   1
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         100     SINGLE EQUATIONS          603
+BLOCKS OF VARIABLES          15     SINGLE VARIABLES          248
+NON ZERO ELEMENTS         1,778     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.003 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S                 kp rposition
+                                  FOR/WHILE 1
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 8
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_payoff Using MIP From line 576
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_payoff          OBJECTIVE  obj
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  576
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                3.0000
+
+ RESOURCE USAGE, LIMIT          0.380      1000.000
+ ITERATION COUNT, LIMIT      2215    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.24sec (det. 106.39 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.06sec (det. 0.66 ticks)
+Proven optimal solution.
+
+MIP Solution:            3.000000    (2204 iterations, 229 nodes)
+Final Solve:             3.000000    (11 iterations)
+
+Best possible:           3.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 9
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_payoff Using MIP From line 576
+
+
+LOOPS                                   kp   rposition
+                                 FOR/WHILE   2
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         100     SINGLE EQUATIONS          603
+BLOCKS OF VARIABLES          15     SINGLE VARIABLES          248
+NON ZERO ELEMENTS         1,778     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.003 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S                 kp rposition
+                                  FOR/WHILE 2
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 10
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_payoff Using MIP From line 576
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_payoff          OBJECTIVE  obj
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  576
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE               10.0000
+
+ RESOURCE USAGE, LIMIT          0.547      1000.000
+ ITERATION COUNT, LIMIT      6808    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.41sec (det. 231.61 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.68 ticks)
+Proven optimal solution.
+
+MIP Solution:           10.000000    (6794 iterations, 608 nodes)
+Final Solve:            10.000000    (14 iterations)
+
+Best possible:          10.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 11
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_epsmethod Using MIP From line 636
+
+
+LOOPS                            FOR/WHILE   1
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         101     SINGLE EQUATIONS          604
+BLOCKS OF VARIABLES          16     SINGLE VARIABLES          249
+NON ZERO ELEMENTS         1,781     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.002 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S          FOR/WHILE 1
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 12
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_epsmethod Using MIP From line 636
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_epsmethod       OBJECTIVE  a_objval
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  636
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                4.0000
+
+ RESOURCE USAGE, LIMIT          1.270      1000.000
+ ITERATION COUNT, LIMIT     28017    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 1.22sec (det. 1043.30 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.67 ticks)
+Proven optimal solution.
+
+MIP Solution:            4.000000    (28001 iterations, 2412 nodes)
+Final Solve:             4.000000    (16 iterations)
+
+Best possible:           4.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 13
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_epsmethod Using MIP From line 636
+
+
+LOOPS                            FOR/WHILE   2
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         101     SINGLE EQUATIONS          604
+BLOCKS OF VARIABLES          16     SINGLE VARIABLES          249
+NON ZERO ELEMENTS         1,781     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.003 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S          FOR/WHILE 2
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 14
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_epsmethod Using MIP From line 636
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_epsmethod       OBJECTIVE  a_objval
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  636
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                4.9999
+
+ RESOURCE USAGE, LIMIT          1.172      1000.000
+ ITERATION COUNT, LIMIT     24557    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 1.16sec (det. 909.70 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.70 ticks)
+Proven optimal solution.
+
+MIP Solution:            4.999917    (24536 iterations, 2446 nodes)
+Final Solve:             4.999917    (21 iterations)
+
+Best possible:           4.999917
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 15
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_epsmethod Using MIP From line 636
+
+
+LOOPS                            FOR/WHILE   3
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         101     SINGLE EQUATIONS          604
+BLOCKS OF VARIABLES          16     SINGLE VARIABLES          249
+NON ZERO ELEMENTS         1,781     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.002 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S          FOR/WHILE 3
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 16
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_epsmethod Using MIP From line 636
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_epsmethod       OBJECTIVE  a_objval
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  636
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                6.0000
+
+ RESOURCE USAGE, LIMIT          2.352      1000.000
+ ITERATION COUNT, LIMIT     27558    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 2.21sec (det. 1958.62 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.67 ticks)
+Proven optimal solution.
+
+MIP Solution:            6.000000    (27544 iterations, 1754 nodes)
+Final Solve:             6.000000    (14 iterations)
+
+Best possible:           6.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 17
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_epsmethod Using MIP From line 636
+
+
+LOOPS                            FOR/WHILE   4
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         101     SINGLE EQUATIONS          604
+BLOCKS OF VARIABLES          16     SINGLE VARIABLES          249
+NON ZERO ELEMENTS         1,781     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.003 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S          FOR/WHILE 4
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 18
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_epsmethod Using MIP From line 636
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_epsmethod       OBJECTIVE  a_objval
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  636
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE                7.9999
+
+ RESOURCE USAGE, LIMIT          1.729      1000.000
+ ITERATION COUNT, LIMIT     32893    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 1.64sec (det. 1481.12 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.67 ticks)
+Proven optimal solution.
+
+MIP Solution:            7.999917    (32881 iterations, 2613 nodes)
+Final Solve:             7.999917    (12 iterations)
+
+Best possible:           7.999917
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 19
+"M E T R O  M A P  A U T O M A T I O N"
+Model Statistics    SOLVE mod_epsmethod Using MIP From line 636
+
+
+LOOPS                            FOR/WHILE   5
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS         101     SINGLE EQUATIONS          604
+BLOCKS OF VARIABLES          16     SINGLE VARIABLES          249
+NON ZERO ELEMENTS         1,781     DISCRETE VARIABLES        157
+
+
+GENERATION TIME      =        0.002 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+               L O O P S          FOR/WHILE 5
+
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 20
+"M E T R O  M A P  A U T O M A T I O N"
+Solution Report     SOLVE mod_epsmethod Using MIP From line 636
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   mod_epsmethod       OBJECTIVE  a_objval
+     TYPE    MIP                 DIRECTION  MINIMIZE
+     SOLVER  CPLEX               FROM LINE  636
+
+**** SOLVER STATUS     1 Normal Completion         
+**** MODEL STATUS      1 Optimal                   
+**** OBJECTIVE VALUE               10.0000
+
+ RESOURCE USAGE, LIMIT          0.876      1000.000
+ ITERATION COUNT, LIMIT     12226    2000000000
+
+IBM ILOG CPLEX   24.2.2 r44857 Released Mar  4, 2014 DEG Mac x86_64/Darwin    
+--- GAMS/Cplex Link licensed for continuous and discrete problems.
+Cplex 12.6.0.0
+
+Space for names approximately 0.02 Mb
+Use option 'names no' to turn use of names off
+MIP status(101): integer optimal solution
+Cplex Time: 0.74sec (det. 406.59 ticks)
+Fixing integer variables, and solving final LP...
+Fixed MIP status(1): optimal
+Cplex Time: 0.00sec (det. 0.67 ticks)
+Proven optimal solution.
+
+MIP Solution:           10.000000    (12213 iterations, 1177 nodes)
+Final Solve:            10.000000    (13 iterations)
+
+Best possible:          10.000000
+Absolute gap:            0.000000
+Relative gap:            0.000000
+
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+GAMS 24.2.2  r44857 Released Mar  4, 2014 XXX-DEG Mac x86_64/Darwin 12/08/15 11:17:49 Page 21
+"M E T R O  M A P  A U T O M A T I O N"
+E x e c u t i o n
+
+
+**** REPORT FILE SUMMARY
+
+fx /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision2/Third-Example/third-example_re
+   sults.txt
+pareto /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision2/Third-Example/thirdexample
+       frontier.csv
+
+
+EXECUTION TIME       =        9.669 SECONDS      4 MB  24.2.2 r44857 XXX-DEG
+
+
+USER: Civil Engineering                              G121219:1814AP-GEN
+      Johns Hopkins University                                  DC10084
+      License for teaching and research at degree granting institutions
+
+
+**** FILE SUMMARY
+
+Input      /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision2/Third-Example/Third-Ex
+           ample-OS-epscm.gms
+Output     /Users/JimiOke/Dropbox/Research/Schematic-Maps-Revision2/Third-Example/Third-Ex
+           ample-OS-epscm.lst
