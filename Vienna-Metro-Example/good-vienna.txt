@@ -1,0 +1,25 @@
+ PAYOFF TABLE
+       10.00       90.00
+       48.00        1.00
+
+ Grid points
+       90.00
+       80.11
+       70.22
+       60.33
+       50.44
+       40.56
+       30.67
+       20.78
+       10.89
+        1.00
+
+Efficient solutions
+    1       10.00       39.00   jump
+    2       13.00       28.00
+    3       18.00       19.00
+    4       30.00       10.00
+    5       48.00        1.00
+
+Infeasibilities =     0
+Elapsed time:    2444.63 seconds
